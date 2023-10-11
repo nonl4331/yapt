@@ -1,6 +1,6 @@
 pub const WIDTH: usize = 1080;
 pub const HEIGHT: usize = 1080;
-const SAMPLES: u64 = 100;
+const SAMPLES: u64 = 1000;
 
 pub mod camera;
 pub mod integrator;
@@ -12,13 +12,13 @@ pub mod prelude {
     pub use crate::material::Mat;
     pub use crate::triangle::Tri;
     pub use crate::Intersection;
-    pub use crate::{HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, TRIANGLES, VERTICES, WIDTH};
+    pub use crate::{SAMPLABLE, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, TRIANGLES, VERTICES, WIDTH};
     pub use bvh::Bvh;
     pub use derive_new::new;
     pub use utility::{Ray, Vec3};
 }
 
-use crate::{camera::Cam, integrator::Naive, material::*, triangle::Tri};
+use crate::{camera::Cam, integrator::*, material::*, triangle::Tri};
 use fern::colors::{Color, ColoredLevelConfig};
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::unsync::Lazy;
@@ -31,6 +31,7 @@ pub static mut VERTICES: Vec<Vec3> = vec![];
 pub static mut NORMALS: Vec<Vec3> = vec![];
 pub static mut MATERIALS: Vec<Mat> = vec![];
 pub static mut TRIANGLES: Vec<Tri> = vec![];
+pub static mut SAMPLABLE: Vec<usize> = vec![];
 pub static mut BVH: Bvh = Bvh { nodes: vec![] };
 pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(|| HashMap::new());
 
@@ -110,7 +111,8 @@ fn main() {
                 let mut rng = thread_rng();
                 let ray = cam.get_ray(i, &mut rng);
 
-                let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
+                let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe {&SAMPLABLE});
+                //let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
 
                 *pixel += (col - *pixel) / sample as f32;
 

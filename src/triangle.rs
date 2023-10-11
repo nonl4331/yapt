@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use bvh::aabb::{Aabb, Aabound};
+use rand::Rng;
 
 #[derive(Debug, new, PartialEq)]
 pub struct Tri {
@@ -141,5 +142,32 @@ impl Tri {
         let point = b0 * v0 + b1 * v1 + b2 * v2;
 
         Intersection::new(t, point, normal, out, self.mat, 0)
+    }
+    pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl Rng) -> (Ray, f32, Vec3) {
+        let v0 = unsafe { VERTICES[self.pos[0]] };
+        let v1 = unsafe { VERTICES[self.pos[1]] };
+        let v2 = unsafe { VERTICES[self.pos[2]] };
+
+        let uv = rng.gen::<f32>().sqrt();
+        let uv = (1.0 - uv, uv * rng.gen::<f32>());
+
+        let point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
+        
+        let dir = point - sect.pos;
+        let ray = Ray::new(sect.pos, dir);
+
+        let pdf = self.pdf(sect, &ray);
+
+        let le = unsafe { MATERIALS[self.mat].le(point, dir) };
+
+        (ray, pdf, le)
+    }
+    pub fn pdf(&self, sect: &Intersection, ray: &Ray) -> f32 {
+        let v0 = unsafe { VERTICES[self.pos[0]] };
+        let v1 = unsafe { VERTICES[self.pos[1]] };
+        let v2 = unsafe { VERTICES[self.pos[2]] };
+        let area = 0.5 * (v1 - v0).cross(v2 - v0).mag();
+
+        (sect.pos - ray.origin).mag_sq() / (sect.nor.dot(ray.dir).abs() * area)
     }
 }

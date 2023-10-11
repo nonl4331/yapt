@@ -1,3 +1,5 @@
+use std::f32::consts::FRAC_1_PI;
+
 use rand::Rng;
 
 use crate::prelude::*;
@@ -9,7 +11,7 @@ pub enum Mat {
 }
 
 impl Mat {
-    pub fn eval(&self, _sect: Intersection, _wo: Vec3, _wi: Vec3) -> Vec3 {
+    pub fn eval(&self, _sect: &Intersection, _wo: Vec3, _wi: Vec3) -> Vec3 {
         match self {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => m.albedo,
@@ -22,10 +24,23 @@ impl Mat {
             Self::Light(_) => true,
         }
     }
-    pub fn le(&self, _sect: &Intersection, _wo: Vec3) -> Vec3 {
+    pub fn le(&self, _pos: Vec3, _wo: Vec3) -> Vec3 {
         match self {
             Self::Matte(_) => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
+        }
+    }
+    // scattering pdf
+    pub fn spdf(&self, sect: &Intersection, wi: Vec3) -> f32 {
+        match self {
+            Self::Matte(_) => wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
+            Self::Light(_) => unreachable!(),
+        }
+    }
+    pub fn bxdf_cos(&self, sect: &Intersection, _wo: Vec3, wi: Vec3) -> Vec3 {
+        match self {
+            Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
+            Self::Light(_) => unreachable!(),
         }
     }
 }
