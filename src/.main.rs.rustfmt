@@ -1,10 +1,8 @@
 pub const WIDTH: usize = 1024;
 pub const HEIGHT: usize = 1024;
-const SAMPLES: u64 = 1000;
-const FILENAME: &'static str = "out.exr";
+const SAMPLES: u64 = 100;
 
 pub mod camera;
-pub mod coord;
 pub mod integrator;
 pub mod loader;
 pub mod material;
@@ -19,7 +17,7 @@ pub mod prelude {
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
-    pub use utility::{Ray, Vec2, Vec3};
+    pub use utility::{Ray, Vec3};
 }
 
 use crate::{camera::Cam, integrator::*, material::*, triangle::Tri};
@@ -101,8 +99,8 @@ fn main() {
 
     // test3
     let cam = Cam::new(
-        Vec3::new(3.0, -1.0, 1.0),
-        Vec3::new(0.0, -1.0, 1.0),
+        Vec3::new(-2.298, -3.917, 1.604),
+        Vec3::new(0.0, 0.0, 1.0),
         Vec3::Z,
         70.0,
         1.0,
@@ -141,8 +139,8 @@ fn main() {
                 let mut rng = thread_rng();
                 let ray = cam.get_ray(i, &mut rng);
 
-                let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
-                //let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
+                //let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
+                let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
 
                 *pixel += (col - *pixel) / sample as f32;
 
@@ -172,7 +170,7 @@ fn main() {
     )
     .unwrap();
 
-    img.save(FILENAME).unwrap();
+    img.save("out.exr").unwrap();
 }
 
 fn create_logger() {

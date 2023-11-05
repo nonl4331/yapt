@@ -1,9 +1,9 @@
-use std::f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4, PI, TAU};
+use std::f32::consts::{FRAC_1_PI};
 
 use rand::Rng;
 
-use crate::coord::Coordinate;
 use crate::prelude::*;
+use crate::coord::Coordinate;
 
 #[derive(Debug, new)]
 pub enum Mat {
@@ -34,7 +34,7 @@ impl Mat {
     // scattering pdf
     pub fn spdf(&self, sect: &Intersection, wi: Vec3) -> f32 {
         match self {
-            Self::Matte(_) => Matte::pdf(wi, sect.nor),
+            Self::Matte(_) => wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
             Self::Light(_) => 0.0,
         }
     }
@@ -53,21 +53,24 @@ pub struct Matte {
 
 impl Matte {
     pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl Rng) -> bool {
-        let dir = Self::sample(sect.nor, rng);
+        let dir = random_in_unit_sphere(rng) + sect.nor;
         *ray = Ray::new(sect.pos, dir.normalised());
         false
     }
     fn sample_local(rng: &mut impl Rng) -> Vec3 {
-        let cos_theta = rng.gen::<f32>().sqrt();
-        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
-        let phi = TAU * rng.gen::<f32>();
-        Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
+	    let cos_theta = (1.0 - rng.gen::<f32>()).sqrt();
+	    let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+	    let phi = 2.0 * PI * rng.gen::<f32>();
+	    Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
+    }
+    fn pdf_local(outgoing: Vec3) -> f32 {
+	    outgoing.z.max(0.0) * FRAC_1_PI
     }
     pub fn sample(normal: Vec3, rng: &mut impl Rng) -> Vec3 {
-        Coordinate::new_from_z(normal).to_coord(Self::sample_local(rng))
+    	Coordinate::new_from_z(normal).to_coord(Self::sample_local(rng))
     }
 
-    pub fn pdf(outgoing: Vec3, normal: Vec3) -> f32 {
+    pub fn pdf(outgoing: Vec3, normal: Vec3) -> Float {
         outgoing.dot(normal).max(0.0) * FRAC_1_PI
     }
 }
@@ -87,28 +90,6 @@ fn random_in_unit_sphere(rng: &mut impl Rng) -> Vec3 {
             return p;
         }
     }
-}
-
-fn concentric_disc_sampling(rng: &mut impl Rng) -> Vec2 {
-    let offset = Vec2::new(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0));
-    if offset.x == 0.0 || offset.y == 0.0 {
-        return Vec2::new(0.0, 0.0);
-    }
-    let (theta, r);
-    if offset.x.abs() > offset.y.abs() {
-        r = offset.x;
-        theta = FRAC_PI_4 * offset.y / offset.x;
-    } else {
-        r = offset.y;
-        theta = FRAC_PI_2 - FRAC_PI_4 * offset.x / offset.y;
-    }
-    r * Vec2::new(theta.cos(), theta.sin())
-}
-
-fn cosine_hemisphere_sampling(rng: &mut impl Rng) -> Vec3 {
-    let d = concentric_disc_sampling(rng);
-    let z = (1.0 - d.mag_sq()).max(0.0).sqrt();
-    Vec3::new(d.x, d.y, z)
 }
 
 #[derive(Debug, new)]

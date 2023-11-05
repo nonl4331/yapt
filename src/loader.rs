@@ -82,7 +82,6 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
 
         for j in 0..ilen / 3 {
             let i = j * 3;
-
             TRIANGLES.push(Tri::new(
                 [
                     mesh.indices[i] as usize + vo,
