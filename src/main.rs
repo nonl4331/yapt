@@ -1,7 +1,7 @@
 pub const WIDTH: usize = 1024;
 pub const HEIGHT: usize = 1024;
-const SAMPLES: u64 = 1000;
-const FILENAME: &'static str = "out.exr";
+const SAMPLES: u64 = 10000;
+const FILENAME: &'static str = "out_naive.exr";
 
 pub mod camera;
 pub mod coord;
@@ -71,25 +71,19 @@ impl Intersection {
 }
 
 unsafe fn scene_init() {
-    loader::add_material("matte", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material("ball1", Mat::Matte(Matte::new(Vec3::new(0.5, 0.8, 0.8))));
+    loader::add_material("ball2", Mat::Matte(Matte::new(Vec3::new(0.8, 0.0, 0.0))));
     loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 3.0)));
 
-    /*let model_map = loader::create_model_map(vec![
-        ("top_light", "light"),
-        ("bottom_light", "light"),
-        ("centre", "matte"),
-    ]);
-
-    loader::load_obj("res/test.obj", 1.0, Vec3::ZERO, model_map);*/
     let model_map = loader::create_model_map(vec![
-        ("top_light", "light"),
-        ("floor", "matte"),
-        ("cube", "matte"),
+        ("floor", "floor"),
+        ("ball1", "ball1"),
         ("light", "light"),
-        ("centre", "matte"),
+        ("ball2", "ball2"),
     ]);
 
-    loader::load_obj("res/test3.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/test1.obj", 1.0, Vec3::ZERO, model_map);
 }
 
 fn main() {
@@ -101,19 +95,13 @@ fn main() {
 
     // test3
     let cam = Cam::new(
-        Vec3::new(3.0, -1.0, 1.0),
         Vec3::new(0.0, -1.0, 1.0),
+        Vec3::new(0.0, 0.0, 1.0),
         Vec3::Z,
         70.0,
         1.0,
     );
-    /*let cam = Cam::new(
-        Vec3::new(-4.1103, 1.815, 2.237),
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::Z,
-        39.6,
-        1.0,
-    );*/
+
     let bvh = unsafe { Bvh::new(&mut TRIANGLES) };
 
     // calculate samplable objects after BVH rearranges TRIANGLES
@@ -141,8 +129,8 @@ fn main() {
                 let mut rng = thread_rng();
                 let ray = cam.get_ray(i, &mut rng);
 
-                let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
-                //let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
+                //let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
+                let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
 
                 *pixel += (col - *pixel) / sample as f32;
 

@@ -18,8 +18,8 @@ impl Cam {
         let right_mag = focus_dist * 2.0 * (0.5 * hfov.to_radians()).tan();
         let up_mag = right_mag / ASPECT_RATIO;
 
-        let right = forward.cross(up) * right_mag;
-        let up = up * up_mag;
+        let right = forward.cross(up).normalised() * right_mag;
+        let up = right.cross(forward).normalised() * up_mag;
 
         let lower_left = origin - 0.5 * right - 0.5 * up + forward * focus_dist;
 

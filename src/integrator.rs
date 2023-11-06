@@ -57,6 +57,7 @@ impl NEEMIS {
         if samplable.is_empty() {
             return Naive::rgb(ray, bvh, rng);
         }
+        let inverse_samplable = 1.0 / samplable.len() as f32;
 
         let mut tp = Vec3::ONE;
 
@@ -97,11 +98,11 @@ impl NEEMIS {
             let light_sect = intersect_idx(&light_ray, bvh, light_idx);
             let mut light_pdf = 0.0;
             if !light_sect.is_none() {
-                light_pdf = light.pdf(&light_sect, &light_ray);
+                light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
             }
 
             // add light contribution if path is reachable by bsdf
-            let light_bsdf_pdf = mat.spdf(&sect, light_ray.dir) / unsafe { SAMPLABLE.len() } as f32;
+            let light_bsdf_pdf = mat.spdf(&sect, light_ray.dir); 
             if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
                 rgb += tp
                     * power_heuristic(light_pdf, light_bsdf_pdf)
@@ -131,7 +132,7 @@ impl NEEMIS {
             // hit samplable calculate weight
             if samplable.contains(&new_sect.id) {
                 let bsdf_light_pdf =
-                    unsafe { TRIANGLES[sect.id].pdf(&new_sect, &ray) } / samplable.len() as f32;
+                    unsafe { TRIANGLES[new_sect.id].pdf(&new_sect, &ray) } * inverse_samplable;
 
                 tp *= power_heuristic(bsdf_pdf, bsdf_light_pdf);
             }
@@ -203,7 +204,6 @@ pub fn intersect_idx(ray: &Ray, bvh: &Bvh, idx: usize) -> Intersection {
 
 #[inline]
 pub fn power_heuristic(pdf_a: f32, pdf_b: f32) -> f32 {
-    0.5
-    /*let a_sq = pdf_a.powi(2);
-    a_sq / (a_sq + pdf_b.powi(2))*/
+    let a_sq = pdf_a.powi(2);
+    a_sq / (a_sq + pdf_b.powi(2))
 }
