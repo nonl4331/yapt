@@ -31,16 +31,16 @@ impl Cam {
         }
     }
 
-    pub fn get_ray(&self, i: usize, rng: &mut impl Rng) -> Ray {
+    pub fn get_ray(&self, i: usize, rng: &mut impl Rng) -> ([f32; 2], Ray) {
         let (u, v) = (i % WIDTH, i / WIDTH);
         let (u, v) = (
             (u as f32 + rng.gen::<f32>()) / WIDTH as f32,
             (v as f32 + rng.gen::<f32>()) / HEIGHT as f32,
         );
 
-        Ray::new(
+        ([u, v], Ray::new(
             self.origin,
             self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
-        )
+        ))
     }
 }

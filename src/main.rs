@@ -9,6 +9,7 @@ pub mod integrator;
 pub mod loader;
 pub mod material;
 pub mod triangle;
+pub mod film;
 
 pub mod prelude {
     pub use crate::material::Mat;
@@ -20,6 +21,7 @@ pub mod prelude {
     pub use bvh::Bvh;
     pub use derive_new::new;
     pub use utility::{Ray, Vec2, Vec3};
+    pub use crate::film::*;
 }
 
 use crate::{camera::Cam, integrator::*, material::*, triangle::Tri};
@@ -91,7 +93,9 @@ fn main() {
 
     unsafe { scene_init() };
 
-    let mut buffer = vec![Vec3::ZERO; WIDTH * HEIGHT];
+	let (send, recv) = std::sync::mpsc::channel();
+	let film = Film::new(recv);
+	let child = film.child(send);
 
     // test3
     let cam = Cam::new(
@@ -119,24 +123,32 @@ fn main() {
             .unwrap(),
     );
 
+	let film_thread = std::thread::spawn(move || film.run());
+
     for sample in 1..=SAMPLES {
         let start = std::time::Instant::now();
 
-        let sample_ray_count = buffer
-            .par_iter_mut()
-            .enumerate()
-            .map(|(i, pixel)| {
+        let sample_ray_count = (0..(WIDTH*HEIGHT)).collect::<Vec<_>>()
+            .par_chunks(1024).enumerate()
+            .map(|(i, c)| {
+                let c = c.len();
+                let offset = 1024*i;
+                let mut splats = Vec::new();
                 let mut rng = thread_rng();
-                let ray = cam.get_ray(i, &mut rng);
-
-                //let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
-                let (col, rays) = Naive::rgb(ray, &bvh, &mut rng);
-
-                *pixel += (col - *pixel) / sample as f32;
+                let mut rays = 0;
+                for idx in offset..(offset+c) {
+                    let (uv, ray) = cam.get_ray(idx, &mut rng);
+                    //let (col, rays) = NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE });
+                    let (col, ray_count) = Naive::rgb(ray, &bvh, &mut rng);
+                    splats.push(Splat::new(uv, col));
+                    rays += ray_count;
+                }
+                child.clone().add_splats(splats);
 
                 rays
             })
             .sum::<u64>();
+        
 
         let dur = start.elapsed();
 
@@ -150,12 +162,16 @@ fn main() {
 
     bar.finish_and_clear();
 
+    child.add_splats(Vec::new());
+	let buffer = film_thread.join().unwrap();
+    let m = 1.0 / SAMPLES as f32;
+
     let img = image::Rgb32FImage::from_vec(
         WIDTH as u32,
         HEIGHT as u32,
         buffer
             .iter()
-            .flat_map(|v| [v.x, v.y, v.z])
+            .flat_map(|v| [v.x * m, v.y * m, v.z * m])
             .collect::<Vec<f32>>(),
     )
     .unwrap();
