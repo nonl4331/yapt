@@ -133,7 +133,7 @@ fn main() {
             .map(|(i, c)| {
                 let c = c.len();
                 let offset = 1024*i;
-                let mut splats = Vec::new();
+                let mut splats = child.clone().get_vec();
                 let mut rng = thread_rng();
                 let mut rays = 0;
                 for idx in offset..(offset+c) {
