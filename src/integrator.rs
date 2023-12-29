@@ -102,7 +102,7 @@ impl NEEMIS {
             }
 
             // add light contribution if path is reachable by bsdf
-            let light_bsdf_pdf = mat.spdf(&sect, light_ray.dir); 
+            let light_bsdf_pdf = mat.spdf(&sect, light_ray.dir);
             if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
                 rgb += tp
                     * power_heuristic(light_pdf, light_bsdf_pdf)

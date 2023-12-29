@@ -134,6 +134,28 @@ impl Bvh {
         }
         ranges
     }
+    pub fn traverse_steps(&self, ray: &Ray) -> usize {
+        let mut steps = 0;
+
+        let mut node_stack = VecDeque::from([0]);
+        while !node_stack.is_empty() {
+            let idx = node_stack.pop_front().unwrap();
+
+            let node = &self.nodes[idx];
+
+            if !node.bounds.does_int(ray) {
+                continue;
+            }
+
+            // both children are valid or neither are
+            if node.left != 0 {
+                steps += 1;
+                node_stack.push_back(node.left);
+                node_stack.push_back(node.right);
+            }
+        }
+        steps
+    }
 }
 
 #[derive(Debug)]

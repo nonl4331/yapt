@@ -38,9 +38,12 @@ impl Cam {
             (v as f32 + rng.gen::<f32>()) / HEIGHT as f32,
         );
 
-        ([u, v], Ray::new(
-            self.origin,
-            self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
-        ))
+        (
+            [u, v],
+            Ray::new(
+                self.origin,
+                self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
+            ),
+        )
     }
 }
