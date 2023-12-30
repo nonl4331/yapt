@@ -1,6 +1,5 @@
 use clap::Parser;
 use fern::colors::{Color, ColoredLevelConfig};
-use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::prelude::*;
 use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
@@ -72,22 +71,14 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
     let film = Film::new(recv, &args);
     let child = film.child(send);
 
-    let bar = ProgressBar::new(args.samples).with_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-            .unwrap(),
-    );
-
     let film_thread = std::thread::spawn(move || film.run());
 
-    for sample in 1..=args.samples {
-        let start = std::time::Instant::now();
-
-        let sample_ray_count = (0..(args.width * args.height))
+    for _ in 0..args.samples {
+        (0..(args.width * args.height))
             .collect::<Vec<_>>()
             .par_chunks(1024)
             .enumerate()
-            .map(|(i, c)| {
+            .for_each(|(i, c)| {
                 let c = c.len();
                 let offset = 1024 * i;
                 let mut splats = child.clone().get_vec();
@@ -104,25 +95,12 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
                     splats.push(Splat::new(uv, col));
                     rays += ray_count;
                 }
-                child.clone().add_splats(splats);
-
-                rays
-            })
-            .sum::<u64>();
-
-        let dur = start.elapsed();
-
-        bar.set_position(sample);
-        bar.set_message(format!(
-            "{:.2} MRay/s ({})",
-            sample_ray_count as f64 * 0.000001 / dur.as_secs_f64(),
-            dur.as_millis()
-        ));
+                let results = IntegratorResults::new(rays, splats);
+                child.clone().add_results(results);
+            });
     }
 
-    bar.finish_and_clear();
-
-    child.add_splats(Vec::new());
+    child.finish_render();
     let buffer = film_thread.join().unwrap();
     let m = 1.0 / args.samples as f32;
 
