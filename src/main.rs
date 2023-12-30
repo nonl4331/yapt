@@ -1,7 +1,7 @@
-pub const WIDTH: usize = 1024;
-pub const HEIGHT: usize = 1024;
+pub const WIDTH: u32 = 1024;
+pub const HEIGHT: u32 = 1024;
 const SAMPLES: u64 = 10000;
-const FILENAME: &'static str = "out_naive.exr";
+const FILENAME: &'static str = "out.exr";
 
 pub mod camera;
 pub mod coord;
@@ -25,14 +25,10 @@ pub mod prelude {
     pub use utility::{Ray, Vec2, Vec3};
 }
 
-use crate::{camera::Cam, integrator::*, material::*, triangle::Tri};
-use clap::Parser;
-use indicatif::{ProgressBar, ProgressStyle};
+use crate::{camera::Cam, material::*, startup::Args, triangle::Tri};
 use once_cell::unsync::Lazy;
 use prelude::*;
-use rand::thread_rng;
-use rayon::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 pub static mut VERTICES: Vec<Vec3> = vec![];
 pub static mut NORMALS: Vec<Vec3> = vec![];
@@ -41,6 +37,36 @@ pub static mut TRIANGLES: Vec<Tri> = vec![];
 pub static mut SAMPLABLE: Vec<usize> = vec![];
 pub static mut BVH: Bvh = Bvh { nodes: vec![] };
 pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(|| HashMap::new());
+
+#[derive(clap::ValueEnum, Copy, Clone)]
+pub enum IntegratorType {
+    Naive,
+    NEE,
+}
+
+impl fmt::Display for IntegratorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Naive => "naive",
+            Self::NEE => "nee",
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(clap::ValueEnum, Copy, Clone)]
+pub enum Scene {
+    One,
+}
+
+impl fmt::Display for Scene {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::One => "one",
+        };
+        write!(f, "{s}")
+    }
+}
 
 #[derive(Debug, new)]
 pub struct Intersection {
@@ -73,7 +99,13 @@ impl Intersection {
     }
 }
 
-unsafe fn scene_init() {
+unsafe fn setup_scene(args: &Args) -> Cam {
+    match args.scene {
+        Scene::One => scene_one(args),
+    }
+}
+
+unsafe fn scene_one(args: &Args) -> Cam {
     loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("ball1", Mat::Matte(Matte::new(Vec3::new(0.5, 0.8, 0.8))));
     loader::add_material("ball2", Mat::Matte(Matte::new(Vec3::new(0.8, 0.0, 0.0))));
@@ -87,15 +119,15 @@ unsafe fn scene_init() {
     ]);
 
     loader::load_obj("res/test1.obj", 1.0, Vec3::ZERO, model_map);
-}
 
-fn get_camera() -> Cam {
     Cam::new(
         Vec3::new(0.0, -1.0, 1.0),
         Vec3::new(0.0, 0.0, 1.0),
         Vec3::Z,
         70.0,
         1.0,
+        args.width,
+        args.height,
     )
 }
 

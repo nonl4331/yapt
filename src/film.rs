@@ -1,4 +1,4 @@
-use crate::{prelude::*, HEIGHT, WIDTH};
+use crate::{prelude::*, startup::Args};
 
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -12,14 +12,20 @@ pub struct Film {
     ready_to_use: Arc<Mutex<Vec<Vec<Splat>>>>,
     canvas: Vec<Vec3>,
     receiver: mpsc::Receiver<Vec<Splat>>,
+    width: usize,
+    height: usize,
 }
 
 impl Film {
-    pub fn new(receiver: mpsc::Receiver<Vec<Splat>>) -> Self {
+    pub fn new(receiver: mpsc::Receiver<Vec<Splat>>, args: &Args) -> Self {
+        let width = args.width as usize;
+        let height = args.height as usize;
         Self {
             ready_to_use: Default::default(),
-            canvas: vec![Vec3::ZERO; WIDTH * HEIGHT],
+            canvas: vec![Vec3::ZERO; width * height],
             receiver,
+            width,
+            height,
         }
     }
     pub fn run(mut self) -> Vec<Vec3> {
@@ -37,7 +43,7 @@ impl Film {
     }
     pub fn add_splats(&mut self, splats: &[Splat]) {
         for splat in splats {
-            let idx = Self::uv_to_idx(splat.uv);
+            let idx = self.uv_to_idx(splat.uv);
             self.canvas[idx] += splat.rgb;
         }
     }
@@ -49,14 +55,14 @@ impl Film {
         }
     }
 
-    fn uv_to_idx(uv: [f32; 2]) -> usize {
+    fn uv_to_idx(&self, uv: [f32; 2]) -> usize {
         if uv[0] >= 1.0 && uv[1] >= 1.0 {
             println!("{uv:?}");
         }
-        let x = (uv[0] * WIDTH as f32) as usize;
-        let y = (uv[1] * HEIGHT as f32) as usize;
+        let x = (uv[0] * self.width as f32) as usize;
+        let y = (uv[1] * self.height as f32) as usize;
 
-        (y * WIDTH + x).min(WIDTH * HEIGHT - 1)
+        (y * self.width + x).min(self.width * self.height - 1)
     }
 }
 

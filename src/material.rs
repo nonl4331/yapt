@@ -1,4 +1,4 @@
-use std::f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4, PI, TAU};
+use std::f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4, TAU};
 
 use rand::Rng;
 
