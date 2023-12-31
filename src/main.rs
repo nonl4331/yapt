@@ -118,7 +118,7 @@ unsafe fn scene_one(args: &Args) -> Cam {
         ("ball2", "ball2"),
     ]);
 
-    loader::load_obj("res/test1.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/one.obj", 1.0, Vec3::ZERO, model_map);
 
     Cam::new(
         Vec3::new(0.0, -1.0, 1.0),
