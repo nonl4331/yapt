@@ -3,7 +3,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 
 use crate::prelude::*;
 use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
-use rand::thread_rng;
+use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
 
 #[derive(Parser)]
@@ -54,8 +54,7 @@ fn generate_heatmap(cam: Cam, bvh: Bvh, args: Args) {
     let buf: Vec<_> = (0..(args.width * args.height))
         .into_par_iter()
         .map(|i| {
-            let mut rng = thread_rng();
-            let (_, ray) = cam.get_ray(i as u64, &mut rng);
+            let ray = cam.get_centre_ray(i as u64);
             bvh.traverse_steps(&ray)
         })
         .collect();
@@ -73,32 +72,32 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
 
     let film_thread = std::thread::spawn(move || film.run());
 
-    for _ in 0..args.samples {
-        (0..(args.width * args.height))
-            .collect::<Vec<_>>()
-            .par_chunks(1024)
-            .enumerate()
-            .for_each(|(i, c)| {
-                let c = c.len();
-                let offset = 1024 * i;
-                let mut splats = child.clone().get_vec();
-                let mut rng = thread_rng();
-                let mut rays = 0;
-                for idx in offset..(offset + c) {
-                    let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
-                    let (col, ray_count) = match args.integrator {
-                        IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
-                        IntegratorType::NEE => {
-                            NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE })
-                        }
-                    };
-                    splats.push(Splat::new(uv, col));
-                    rays += ray_count;
-                }
-                let results = IntegratorResults::new(rays, splats);
-                child.clone().add_results(results);
-            });
-    }
+    const CHUNK_SIZE: usize = 4096;
+    let pixels = args.width as usize * args.height as usize;
+
+    (0..(pixels * args.samples as usize))
+        .into_par_iter()
+        .chunks(CHUNK_SIZE)
+        .enumerate()
+        .for_each(|(i, c)| {
+            let c = c.len();
+            let offset = CHUNK_SIZE * i;
+            let mut splats = child.clone().get_vec();
+            let mut rng = Pcg64Mcg::new(i as u128);
+            let mut rays = 0;
+            for idx in offset..(offset + c) {
+                let idx = idx % pixels;
+                let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
+                let (col, ray_count) = match args.integrator {
+                    IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
+                    IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE }),
+                };
+                splats.push(Splat::new(uv, col));
+                rays += ray_count;
+            }
+            let results = IntegratorResults::new(rays, splats);
+            child.clone().add_results(results);
+        });
 
     child.finish_render();
     let buffer = film_thread.join().unwrap();

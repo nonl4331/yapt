@@ -57,4 +57,15 @@ impl Cam {
             ),
         )
     }
+    pub fn get_centre_ray(&self, i: u64) -> Ray {
+        let (u, v) = (i % self.width as u64, i / self.width as u64);
+        let (u, v) = (
+            (u as f32 + 0.5) / self.width as f32,
+            (v as f32 + 0.5) / self.height as f32,
+        );
+        Ray::new(
+            self.origin,
+            self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
+        )
+    }
 }
