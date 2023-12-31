@@ -1,4 +1,5 @@
 use clap::Parser;
+use exr::meta::header::ImageAttributes;
 use fern::colors::{Color, ColoredLevelConfig};
 
 use crate::prelude::*;
@@ -107,6 +108,7 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
 }
 
 fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
+    if args.bvh_heatmap {
     let img = image::Rgb32FImage::from_vec(
         args.width,
         args.height,
@@ -118,6 +120,27 @@ fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
     .unwrap();
 
     img.save(args.filename).unwrap();
+    } else {
+        use exr::math;
+        use exr::image::write::WritableImage;
+        use exr::image::*;
+        use exr::meta::header::*;
+        let dim = math::Vec2(args.width as usize, args.height as usize);
+        let pixel_val = |pos: math::Vec2<usize>| {
+            let i = pos.x() + pos.y() * args.width as usize;
+            let rgb = buffer[i] * m;
+            (rgb.x, rgb.y, rgb.z)
+        };
+
+        let mut layer_attributes = LayerAttributes::default();
+        layer_attributes.white_luminance = Some(1000.0);
+        let layer = Layer::new(dim, layer_attributes, Encoding::FAST_LOSSLESS, SpecificChannels::rgb(pixel_val));
+        let mut image = Image::from_layer(layer);
+        image.attributes.chromaticities = Some(exr::meta::attribute::Chromaticities { red: math::Vec2(0.708, 0.292), green: math::Vec2(0.170, 0.797), blue: math::Vec2(0.131, 0.0046), white: math::Vec2(0.3127, 0.3290)});
+        image.attributes.pixel_aspect = 1.0;
+        
+        image.write().to_file(args.filename).unwrap();
+    }
 }
 
 fn heatmap(t: f32) -> Vec3 {
