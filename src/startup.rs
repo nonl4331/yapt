@@ -1,9 +1,9 @@
 use clap::Parser;
-use exr::meta::header::ImageAttributes;
 use fern::colors::{Color, ColoredLevelConfig};
 
 use crate::prelude::*;
 use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
+use rand::thread_rng;
 use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
 
@@ -24,6 +24,8 @@ pub struct Args {
     pub integrator: IntegratorType,
     #[arg(short, long, default_value_t = Scene::One)]
     pub scene: Scene,
+    #[arg(short, default_value_t = false)]
+    pub pssmlt: bool,
 }
 
 pub fn run() {
@@ -47,7 +49,11 @@ pub fn run() {
     if args.bvh_heatmap {
         generate_heatmap(cam, bvh, args);
     } else {
-        render_image(cam, bvh, args);
+        if args.pssmlt {
+            render_image_pssmlt(cam, bvh, args)
+        } else {
+            render_image(cam, bvh, args);
+        }
     }
 }
 
@@ -107,23 +113,122 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
     save_image(buffer, m, args);
 }
 
+fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
+    let mutations_per_pixel = args.samples;
+
+    // bootstrap
+    const BOOTSTRAP_CHAINS: usize = 100_000;
+    let contributions: Vec<_> = (0..BOOTSTRAP_CHAINS)
+        .into_par_iter()
+        .map(|i| {
+            let mut rng = Pcg64Mcg::new(i as u128);
+            let (_, ray) = cam.get_random_ray(&mut rng);
+            let (rgb, _) = match args.integrator {
+                IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
+                IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE }),
+            };
+            scalar_contribution(rgb)
+        })
+        .collect();
+
+    log::info!("bootstrap completed");
+
+    let distr = crate::distributions::Distribution1D::new(&contributions);
+
+    let weight = distr.func_int as f64 / BOOTSTRAP_CHAINS as f64;
+
+    let (send, recv) = std::sync::mpsc::channel();
+    let film = Film::new(recv, &args);
+    let child = film.child(send);
+
+    let film_thread = std::thread::spawn(move || film.run());
+
+    let pixels = args.width as usize * args.height as usize;
+    let total_mutations = pixels * mutations_per_pixel as usize;
+
+    const CHAINS: usize = 100;
+    let chunk_size: usize = (total_mutations as f64 / CHAINS as f64) as usize;
+
+    (0..total_mutations)
+        .into_par_iter()
+        .chunks(chunk_size)
+        .for_each(|c| {
+            // rng to pick the stating state for this chain
+            let mut aux_rng = thread_rng();
+            let i = distr.sample(&mut aux_rng);
+            let mut pss = crate::pssmlt::PssState::new(Pcg64Mcg::new(i as u128));
+            let (mut uv_cur, ray) = cam.get_random_ray(&mut pss);
+            let (mut col_cur, ray_count) = match args.integrator {
+                IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut pss),
+                IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut pss, unsafe { &SAMPLABLE }),
+            };
+            let mut rays = ray_count;
+            let mut l_cur = scalar_contribution(col_cur);
+
+            // number of mutations to do for the current chain
+            let c = c.len();
+
+            (0..c)
+                .into_iter()
+                .collect::<Vec<_>>()
+                .chunks(4096)
+                .for_each(|sc| {
+                    let mut splats = child.clone().get_vec();
+                    for _ in 0..sc.len() {
+                        pss.start_iteration();
+                        let (uv_prop, ray) = cam.get_random_ray(&mut pss);
+                        let (col_prop, ray_count) = match args.integrator {
+                            IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut pss),
+                            IntegratorType::NEE => {
+                                NEEMIS::rgb(ray, &bvh, &mut pss, unsafe { &SAMPLABLE })
+                            }
+                        };
+                        let l_prop = scalar_contribution(col_prop);
+                        rays += ray_count;
+
+                        let accept = (l_prop / l_cur).min(1.0);
+                        splats.push(Splat::new(uv_prop, col_prop * accept / l_prop));
+                        splats.push(Splat::new(uv_cur, col_cur * (1.0 - accept) / l_cur));
+
+                        if aux_rng.gen() < accept {
+                            uv_cur = uv_prop;
+                            l_cur = l_prop;
+                            col_cur = col_prop;
+                            pss.accept();
+                        } else {
+                            pss.reject();
+                        }
+                    }
+                    let results = IntegratorResults::new(rays, splats);
+                    rays = 0;
+                    child.clone().add_results(results);
+                });
+        });
+
+    child.finish_render();
+    let buffer = film_thread.join().unwrap();
+    let m = weight / mutations_per_pixel as f64;
+
+    save_image(buffer, m as f32, args);
+}
+
 fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
     if args.bvh_heatmap {
-    let img = image::Rgb32FImage::from_vec(
-        args.width,
-        args.height,
-        buffer
-            .iter()
-            .flat_map(|v| [v.x * m, v.y * m, v.z * m])
-            .collect::<Vec<f32>>(),
-    )
-    .unwrap();
+        let img = image::Rgb32FImage::from_vec(
+            args.width,
+            args.height,
+            buffer
+                .iter()
+                .flat_map(|v| [v.x * m, v.y * m, v.z * m])
+                .collect::<Vec<f32>>(),
+        )
+        .unwrap();
 
-    img.save(args.filename).unwrap();
+        img.save(args.filename).unwrap();
     } else {
-        use exr::math;
         use exr::image::write::WritableImage;
         use exr::image::*;
+        use exr::math;
         use exr::meta::header::*;
         let dim = math::Vec2(args.width as usize, args.height as usize);
         let pixel_val = |pos: math::Vec2<usize>| {
@@ -134,13 +239,29 @@ fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
 
         let mut layer_attributes = LayerAttributes::default();
         layer_attributes.white_luminance = Some(1000.0);
-        let layer = Layer::new(dim, layer_attributes, Encoding::FAST_LOSSLESS, SpecificChannels::rgb(pixel_val));
+        let layer = Layer::new(
+            dim,
+            layer_attributes,
+            Encoding::FAST_LOSSLESS,
+            SpecificChannels::rgb(pixel_val),
+        );
         let mut image = Image::from_layer(layer);
-        image.attributes.chromaticities = Some(exr::meta::attribute::Chromaticities { red: math::Vec2(0.708, 0.292), green: math::Vec2(0.170, 0.797), blue: math::Vec2(0.131, 0.0046), white: math::Vec2(0.3127, 0.3290)});
+        image.attributes.chromaticities = Some(exr::meta::attribute::Chromaticities {
+            red: math::Vec2(0.708, 0.292),
+            green: math::Vec2(0.170, 0.797),
+            blue: math::Vec2(0.131, 0.0046),
+            white: math::Vec2(0.3127, 0.3290),
+        });
         image.attributes.pixel_aspect = 1.0;
-        
+
         image.write().to_file(args.filename).unwrap();
     }
+}
+
+// REC.2020 -> XYZ.Y (not entirely sure if this is correct)
+fn scalar_contribution(rgb: Vec3) -> f32 {
+    (0.144616903586208 * rgb.x + 0.677998071518871 * rgb.y + 0.0280726930490874 * rgb.z).max(0.0001)
+    // max is to avoid NAN
 }
 
 fn heatmap(t: f32) -> Vec3 {

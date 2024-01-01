@@ -5,16 +5,19 @@ const FILENAME: &'static str = "out.exr";
 
 pub mod camera;
 pub mod coord;
+pub mod distributions;
 pub mod film;
 pub mod integrator;
 pub mod loader;
 pub mod material;
+pub mod pssmlt;
 pub mod startup;
 pub mod triangle;
 
 pub mod prelude {
     pub use crate::film::*;
     pub use crate::material::Mat;
+    pub use crate::pssmlt::MinRng;
     pub use crate::triangle::Tri;
     pub use crate::Intersection;
     pub use crate::{

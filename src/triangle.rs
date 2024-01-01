@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use bvh::aabb::{Aabb, Aabound};
-use rand::Rng;
 
 #[derive(Debug, new, PartialEq)]
 pub struct Tri {
@@ -145,13 +144,13 @@ impl Tri {
 
         Intersection::new(t, point, normal, out, self.mat, 0)
     }
-    pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl Rng) -> (Ray, Vec3) {
+    pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl MinRng) -> (Ray, Vec3) {
         let v0 = unsafe { VERTICES[self.pos[0]] };
         let v1 = unsafe { VERTICES[self.pos[1]] };
         let v2 = unsafe { VERTICES[self.pos[2]] };
 
-        let uv = rng.gen::<f32>().sqrt();
-        let uv = (1.0 - uv, uv * rng.gen::<f32>());
+        let uv = rng.gen().sqrt();
+        let uv = (1.0 - uv, uv * rng.gen());
 
         let point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
 

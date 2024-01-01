@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use rand::Rng;
 
 pub struct Cam {
     pub lower_left: Vec3,
@@ -42,11 +41,11 @@ impl Cam {
         }
     }
 
-    pub fn get_ray(&self, i: u64, rng: &mut impl Rng) -> ([f32; 2], Ray) {
+    pub fn get_ray(&self, i: u64, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
         let (u, v) = (i % self.width as u64, i / self.width as u64);
         let (u, v) = (
-            (u as f32 + rng.gen::<f32>()) / self.width as f32,
-            (v as f32 + rng.gen::<f32>()) / self.height as f32,
+            (u as f32 + rng.gen()) / self.width as f32,
+            (v as f32 + rng.gen()) / self.height as f32,
         );
 
         (
@@ -66,6 +65,16 @@ impl Cam {
         Ray::new(
             self.origin,
             self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
+        )
+    }
+    pub fn get_random_ray(&self, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
+        let (u, v) = (rng.gen(), rng.gen());
+        (
+            [u, v],
+            Ray::new(
+                self.origin,
+                self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
+            ),
         )
     }
 }

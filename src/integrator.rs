@@ -1,6 +1,4 @@
 use crate::prelude::*;
-use rand::seq::SliceRandom;
-use rand::Rng;
 
 const MAX_DEPTH: u64 = 50;
 const RUSSIAN_ROULETTE_THRESHOLD: u64 = 3;
@@ -8,7 +6,7 @@ const RUSSIAN_ROULETTE_THRESHOLD: u64 = 3;
 pub struct Naive {}
 
 impl Naive {
-    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl Rng) -> (Vec3, u64) {
+    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng) -> (Vec3, u64) {
         let (mut tp, mut rgb) = (Vec3::ONE, Vec3::ZERO);
 
         let mut depth = 0;
@@ -36,16 +34,16 @@ impl Naive {
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
-                if rng.gen::<f32>() > p {
+                if rng.gen() > p {
                     break;
                 }
                 tp /= p;
             }
         }
         if rgb.contains_nan() {
+            println!("a");
             return (Vec3::ZERO, 0);
         }
-
         (rgb, depth)
     }
 }
@@ -53,7 +51,7 @@ impl Naive {
 pub struct NEEMIS {}
 
 impl NEEMIS {
-    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl Rng, samplable: &[usize]) -> (Vec3, u64) {
+    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng, samplable: &[usize]) -> (Vec3, u64) {
         if samplable.is_empty() {
             return Naive::rgb(ray, bvh, rng);
         }
@@ -87,7 +85,8 @@ impl NEEMIS {
             // Light sampling
             // ----
             // pick light
-            let light_idx = *samplable.choose(rng).unwrap();
+            let light_idx = rng.gen_range(0.0..(samplable.len() as f32)) as usize;
+            //let light_idx = *samplable.choose(rng).unwrap();
             let light = unsafe { &TRIANGLES[light_idx] };
 
             // sample ray
@@ -155,7 +154,7 @@ impl NEEMIS {
             // ----
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
-                if rng.gen::<f32>() > p {
+                if rng.gen() > p {
                     break;
                 }
                 tp /= p;

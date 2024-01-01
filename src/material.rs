@@ -1,7 +1,5 @@
 use std::f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4, TAU};
 
-use rand::Rng;
-
 use crate::coord::Coordinate;
 use crate::prelude::*;
 
@@ -19,7 +17,7 @@ impl Mat {
             Self::Light(_) => unreachable!(),
         }
     }
-    pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl Rng) -> bool {
+    pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         match self {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => true,
@@ -52,18 +50,18 @@ pub struct Matte {
 }
 
 impl Matte {
-    pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl Rng) -> bool {
+    pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl MinRng) -> bool {
         let dir = Self::sample(sect.nor, rng);
         *ray = Ray::new(sect.pos, dir.normalised());
         false
     }
-    fn sample_local(rng: &mut impl Rng) -> Vec3 {
-        let cos_theta = rng.gen::<f32>().sqrt();
+    fn sample_local(rng: &mut impl MinRng) -> Vec3 {
+        let cos_theta = rng.gen().sqrt();
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
-        let phi = TAU * rng.gen::<f32>();
+        let phi = TAU * rng.gen();
         Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
     }
-    pub fn sample(normal: Vec3, rng: &mut impl Rng) -> Vec3 {
+    pub fn sample(normal: Vec3, rng: &mut impl MinRng) -> Vec3 {
         Coordinate::new_from_z(normal).to_coord(Self::sample_local(rng))
     }
 
@@ -72,15 +70,11 @@ impl Matte {
     }
 }
 
-fn random_vec3(rng: &mut impl Rng) -> Vec3 {
-    Vec3::new(
-        rng.gen::<f32>() - 0.5,
-        rng.gen::<f32>() - 0.5,
-        rng.gen::<f32>() - 0.5,
-    )
+fn random_vec3(rng: &mut impl MinRng) -> Vec3 {
+    Vec3::new(rng.gen() - 0.5, rng.gen() - 0.5, rng.gen() - 0.5)
 }
 
-fn random_in_unit_sphere(rng: &mut impl Rng) -> Vec3 {
+fn random_in_unit_sphere(rng: &mut impl MinRng) -> Vec3 {
     loop {
         let p = random_vec3(rng);
         if p.mag_sq() < 1.0 {
@@ -89,7 +83,7 @@ fn random_in_unit_sphere(rng: &mut impl Rng) -> Vec3 {
     }
 }
 
-fn concentric_disc_sampling(rng: &mut impl Rng) -> Vec2 {
+fn concentric_disc_sampling(rng: &mut impl MinRng) -> Vec2 {
     let offset = Vec2::new(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0));
     if offset.x == 0.0 || offset.y == 0.0 {
         return Vec2::new(0.0, 0.0);
@@ -105,7 +99,7 @@ fn concentric_disc_sampling(rng: &mut impl Rng) -> Vec2 {
     r * Vec2::new(theta.cos(), theta.sin())
 }
 
-fn cosine_hemisphere_sampling(rng: &mut impl Rng) -> Vec3 {
+fn cosine_hemisphere_sampling(rng: &mut impl MinRng) -> Vec3 {
     let d = concentric_disc_sampling(rng);
     let z = (1.0 - d.mag_sq()).max(0.0).sqrt();
     Vec3::new(d.x, d.y, z)
