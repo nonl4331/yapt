@@ -3,10 +3,16 @@ use std::f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4, TAU};
 use crate::coord::Coordinate;
 use crate::prelude::*;
 
+mod ggx;
+mod testing;
+
+use ggx::Ggx;
+
 #[derive(Debug, new)]
 pub enum Mat {
     Matte(Matte),
     Light(Light),
+    Glossy(Ggx),
 }
 
 impl Mat {
@@ -15,31 +21,37 @@ impl Mat {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => m.albedo,
             Self::Light(_) => unreachable!(),
+            _ => todo!(),
         }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         match self {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => true,
+            Self::Glossy(m) => m.scatter(sect, ray, rng),
         }
     }
     pub fn le(&self, _pos: Vec3, _wo: Vec3) -> Vec3 {
         match self {
-            Self::Matte(_) => Vec3::ZERO,
+            Self::Matte(_) | Self::Glossy(_) => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
         }
     }
     // scattering pdf
-    pub fn spdf(&self, sect: &Intersection, wi: Vec3) -> f32 {
+    pub fn spdf(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> f32 {
+        // wo should be pointing away from the surface for BRDFs
+        let wo = -wo;
         match self {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
+            Self::Glossy(m) => m.pdf(wo, sect.nor, wi),
         }
     }
     pub fn bxdf_cos(&self, sect: &Intersection, _wo: Vec3, wi: Vec3) -> Vec3 {
         match self {
             Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
             Self::Light(_) => unreachable!(),
+            _ => todo!(),
         }
     }
 }

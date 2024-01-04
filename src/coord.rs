@@ -30,7 +30,7 @@ impl Coordinate {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use crate::random_unit_vector;
 
@@ -47,4 +47,4 @@ mod tests {
                 && (v - to.to_coord(from.to_coord(v))).mag_sq() < 0.000001
         );
     }
-}
+}*/

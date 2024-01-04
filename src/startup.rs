@@ -275,7 +275,7 @@ fn heatmap(t: f32) -> Vec3 {
     C0 + (C1 + (C2 + (C3 + (C4 + (C5 + C6 * t) * t) * t) * t) * t) * t
 }
 
-fn create_logger() {
+pub fn create_logger() {
     let colors = ColoredLevelConfig::new()
         .error(Color::Red)
         .warn(Color::Yellow)
@@ -293,7 +293,6 @@ fn create_logger() {
             ))
         })
         .level(log::LevelFilter::Info)
-        .level_for("winit", log::LevelFilter::Warn)
         .chain(std::io::stderr())
         .apply()
         .unwrap();

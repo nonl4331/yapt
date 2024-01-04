@@ -25,6 +25,7 @@ pub mod prelude {
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
+    pub use std::f32::consts::*;
     pub use utility::{Ray, Vec2, Vec3};
 }
 

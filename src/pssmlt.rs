@@ -63,8 +63,8 @@ pub struct PssState<R: Rng> {
 }
 
 impl<R: Rng> PssState<R> {
-    const LARGE_PROB: f32 = 0.1;
-    const SMALL_STDEV: f32 = 0.3;
+    const LARGE_PROB: f32 = 0.01;
+    const SMALL_STDEV: f32 = 0.1;
 
     pub fn new(rng: R) -> Self {
         Self {
