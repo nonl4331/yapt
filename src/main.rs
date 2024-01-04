@@ -135,6 +135,10 @@ unsafe fn scene_one(args: &Args) -> Cam {
     )
 }
 
+unsafe fn scene_two(args: &Args) -> Cam {
+    todo!()
+}
+
 fn main() {
     startup::run();
 }

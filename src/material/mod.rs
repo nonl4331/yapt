@@ -6,7 +6,7 @@ use crate::prelude::*;
 mod ggx;
 mod testing;
 
-use ggx::Ggx;
+pub use ggx::Ggx;
 
 #[derive(Debug, new)]
 pub enum Mat {
@@ -16,12 +16,13 @@ pub enum Mat {
 }
 
 impl Mat {
-    pub fn eval(&self, _sect: &Intersection, _wo: Vec3, _wi: Vec3) -> Vec3 {
+    pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        let wo = -wo;
         match self {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => m.albedo,
             Self::Light(_) => unreachable!(),
-            _ => todo!(),
+            Self::Glossy(m) => m.eval(sect, wo, wi),
         }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {

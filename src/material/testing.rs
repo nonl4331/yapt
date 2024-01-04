@@ -31,7 +31,7 @@ mod tests {
         let a = rng.gen();
 
         let name = "ggx";
-        let mat = Mat::Glossy(Ggx::new(a));
+        let mat = Mat::Glossy(Ggx::new(a, Vec3::ONE));
 
         log_info("ggx", format!("alpha: {a}"));
 
@@ -71,7 +71,7 @@ mod tests {
         let a = rng.gen();
 
         let name = "ggx_vndf";
-        let mat = Ggx::new(a);
+        let mat = Ggx::new(a, Vec3::ONE);
 
         log_info("ggx_vndf", format!("alpha: {a}"));
 

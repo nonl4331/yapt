@@ -4,15 +4,16 @@ pub use crate::prelude::*;
 pub struct Ggx {
     a: f32,
     a_sq: f32,
+    ior: Vec3,
 }
 
 impl Ggx {
-    pub fn new(a: f32) -> Self {
+    pub fn new(a: f32, ior: Vec3) -> Self {
         // don't allow a=0 due to floating point
         // large values of a also have slight
         // floating point issues such as a = 100
         let a = a.max(0.001); 
-        Self { a, a_sq: a.powi(2) }
+        Self { a, a_sq: a.powi(2), ior }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         // by convention points away from surface hence the -ray.dir (section 2, definition)
@@ -26,6 +27,16 @@ impl Ggx {
         let wm = self.sample_vndf_local(local_wo, rng);
         let local_wi = local_wo.reflected(wm);
         coord.create_inverse().to_coord(local_wi).normalised()
+    }
+
+    pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        // transform to local
+        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
+        let wo = coord.to_coord(wo);
+        let wi = coord.to_coord(wi);
+        let wm = (wo + wi).normalised();
+        // f * g2 / g1 (Heitz2018GGX 19)
+        self.f(wm.dot(wo)) * self.g2_local(wo, wi) / self.g1_local(wo)
     }
 
     // local space (hemisphere on z=0 plane see section 2, definition)
@@ -81,9 +92,22 @@ impl Ggx {
         FRAC_1_PI / denom.powi(2)
     }
 
-    fn g1_local(&self, w: Vec3) -> f32 {
+    fn lambda(&self, w: Vec3) -> f32 {
         let lambda = self.a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
-        let lambda = 0.5 * ((1.0 + lambda).sqrt() - 1.0);
+        0.5 * ((1.0 + lambda).sqrt() - 1.0)
+    }
+
+    fn g1_local(&self, w: Vec3) -> f32 {
+        let lambda = self.lambda(w);
         1.0 / (1.0 + lambda)
+    }
+
+    // Height correlated G2 (Heitz2014Microfacet 99)
+    fn g2_local(&self, in_w: Vec3, out_w: Vec3) -> f32 {
+        1.0 / (1.0 + self.lambda(in_w) + self.lambda(out_w))
+    }
+    // fresnel 
+    fn f(&self, cos_theta: f32) -> Vec3 {
+        self.ior + (1.0 - self.ior) * (1.0 - cos_theta).powi(5)
     }
 }
