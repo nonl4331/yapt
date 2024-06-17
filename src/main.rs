@@ -61,12 +61,14 @@ impl fmt::Display for IntegratorType {
 #[derive(clap::ValueEnum, Copy, Clone)]
 pub enum Scene {
     One,
+    Car,
 }
 
 impl fmt::Display for Scene {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::One => "one",
+            Self::Car => "car",
         };
         write!(f, "{s}")
     }
@@ -106,6 +108,7 @@ impl Intersection {
 unsafe fn setup_scene(args: &Args) -> Cam {
     match args.scene {
         Scene::One => scene_one(args),
+        Scene::Car => scene_car(args),
     }
 }
 
@@ -135,8 +138,50 @@ unsafe fn scene_one(args: &Args) -> Cam {
     )
 }
 
-unsafe fn scene_two(args: &Args) -> Cam {
-    todo!()
+unsafe fn scene_car(args: &Args) -> Cam {
+    let test_mat = Mat::Glossy(Ggx::new(0.05, Vec3::X * 0.8));
+    loader::add_material("default", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.8)));
+    loader::add_material("test", test_mat);
+    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 3.0)));
+
+    let model_map = loader::create_model_map(vec![
+        ("default", "default"),
+        ("floor", "floor"),
+        ("light", "light"),
+        ("BodyMat", "test"),
+    ]);
+
+    loader::load_obj("res/sports_car.obj", 1.0, Vec3::ZERO, model_map);
+
+    Cam::new(
+        Vec3::new(2.0, -4.0, 1.0),
+        Vec3::new(0.0, 0.0, 1.0),
+        Vec3::Z,
+        70.0,
+        1.0,
+        args.width,
+        args.height,
+    )
+}
+
+unsafe fn scene_furnace_test(args: &Args) -> Cam {
+    loader::add_material("Inner", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE)));
+
+    let model_map = loader::create_model_map(vec![("Ineer", "Inner"), ("Outer", "light")]);
+
+    loader::load_obj("res/furnace_test.obj", 1.0, Vec3::ZERO, model_map);
+
+    Cam::new(
+        Vec3::new(-4.0, 0.0, 0.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::Z,
+        70.0,
+        1.0,
+        args.width,
+        args.height,
+    )
 }
 
 fn main() {

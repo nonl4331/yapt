@@ -1,5 +1,4 @@
 use clap::Parser;
-use fern::colors::{Color, ColoredLevelConfig};
 
 use crate::prelude::*;
 use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
@@ -276,24 +275,10 @@ fn heatmap(t: f32) -> Vec3 {
 }
 
 pub fn create_logger() {
-    let colors = ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        .info(Color::Cyan)
-        .debug(Color::Magenta);
-
-    fern::Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{} {} [{}] {}",
-                chrono::Local::now().format("%H:%M:%S"),
-                colors.color(record.level()),
-                record.target(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Info)
-        .chain(std::io::stderr())
-        .apply()
-        .unwrap();
+    // ensure default log level when
+    // RUST_LOG isn't set is info
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
 }

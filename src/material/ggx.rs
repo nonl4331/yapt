@@ -12,8 +12,12 @@ impl Ggx {
         // don't allow a=0 due to floating point
         // large values of a also have slight
         // floating point issues such as a = 100
-        let a = a.max(0.001); 
-        Self { a, a_sq: a.powi(2), ior }
+        let a = a.max(0.001);
+        Self {
+            a,
+            a_sq: a.powi(2),
+            ior,
+        }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         // by convention points away from surface hence the -ray.dir (section 2, definition)
@@ -49,10 +53,8 @@ impl Ggx {
         let p_hemi = Self::sample_vndf_hemisphere(in_w, rng);
 
         // transform intersection point back (section 2, importance sampling 3)
-        let p_elipsoid = Vec3::new(p_hemi.x * self.a, p_hemi.y * self.a, p_hemi.z).normalised();
+        Vec3::new(p_hemi.x * self.a, p_hemi.y * self.a, p_hemi.z).normalised()
         // ^^ why is this * not /
-
-        p_elipsoid
     }
 
     // (section 3, listing 3)
@@ -106,7 +108,7 @@ impl Ggx {
     fn g2_local(&self, in_w: Vec3, out_w: Vec3) -> f32 {
         1.0 / (1.0 + self.lambda(in_w) + self.lambda(out_w))
     }
-    // fresnel 
+    // fresnel
     fn f(&self, cos_theta: f32) -> Vec3 {
         self.ior + (1.0 - self.ior) * (1.0 - cos_theta).powi(5)
     }

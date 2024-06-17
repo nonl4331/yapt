@@ -2,6 +2,16 @@
 mod tests {
     use rand::thread_rng;
 
+    // false positive
+    #[allow(dead_code)]
+    fn logging_init() {
+        let _ = env_logger::Builder::new()
+            .filter_level(log::LevelFilter::Info)
+            .parse_default_env()
+            .is_test(true)
+            .try_init();
+    }
+
     const THETA_BINS: usize = 180;
     const PHI_BINS: usize = 2 * THETA_BINS;
     const BINS: usize = PHI_BINS * THETA_BINS;
@@ -12,8 +22,6 @@ mod tests {
 
     #[test]
     pub fn lambertian() {
-        crate::startup::create_logger();
-
         let mut rng = thread_rng();
         let wo = -generate_wo(&mut rng, true);
 
@@ -24,8 +32,6 @@ mod tests {
 
     #[test]
     pub fn ggx() {
-        crate::startup::create_logger();
-
         let mut rng = thread_rng();
         let wo = -generate_wo(&mut rng, true);
         let a = rng.gen();
@@ -64,8 +70,6 @@ mod tests {
 
     #[test]
     fn vndf() {
-        crate::startup::create_logger();
-
         let mut rng = thread_rng();
         let wo = -generate_wo(&mut rng, true);
         let a = rng.gen();
