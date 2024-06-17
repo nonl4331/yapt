@@ -1,11 +1,12 @@
 pub const WIDTH: u32 = 1024;
 pub const HEIGHT: u32 = 1024;
 const SAMPLES: u64 = 10000;
-const FILENAME: &'static str = "out.exr";
+const FILENAME: &str = "out.exr";
 
 pub mod camera;
 pub mod coord;
 pub mod distributions;
+pub mod envmap;
 pub mod film;
 pub mod integrator;
 pub mod loader;
@@ -15,13 +16,14 @@ pub mod startup;
 pub mod triangle;
 
 pub mod prelude {
+    pub use crate::envmap::*;
     pub use crate::film::*;
     pub use crate::material::Mat;
     pub use crate::pssmlt::MinRng;
     pub use crate::triangle::Tri;
     pub use crate::Intersection;
     pub use crate::{
-        HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -40,7 +42,8 @@ pub static mut MATERIALS: Vec<Mat> = vec![];
 pub static mut TRIANGLES: Vec<Tri> = vec![];
 pub static mut SAMPLABLE: Vec<usize> = vec![];
 pub static mut BVH: Bvh = Bvh { nodes: vec![] };
-pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(|| HashMap::new());
+pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(HashMap::new);
+pub static mut ENVMAP: EnvMap = EnvMap::DEFAULT;
 
 #[derive(clap::ValueEnum, Copy, Clone)]
 pub enum IntegratorType {

@@ -1,5 +1,6 @@
 use clap::Parser;
 
+use crate::envmap::TextureData;
 use crate::prelude::*;
 use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
 use rand::thread_rng;
@@ -25,12 +26,23 @@ pub struct Args {
     pub scene: Scene,
     #[arg(short, default_value_t = false)]
     pub pssmlt: bool,
+    #[arg(short, long)]
+    pub environment_map: Option<String>,
 }
 
 pub fn run() {
     let args = Args::parse();
 
     create_logger();
+
+    if let Some(ref path) = args.environment_map {
+        if let Ok(image) = TextureData::from_path(path) {
+            unsafe { crate::ENVMAP = EnvMap::Image(image) };
+            log::info!("Loaded envmap");
+        } else {
+            log::warn!("Could not import envmap {path}.");
+        }
+    }
 
     let cam = unsafe { crate::setup_scene(&args) };
 

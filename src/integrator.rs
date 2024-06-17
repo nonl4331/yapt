@@ -17,7 +17,7 @@ impl Naive {
             let sect = get_intersection(&ray, bvh);
 
             if sect.is_none() {
-                return (Vec3::ZERO, depth);
+                return (unsafe { tp * ENVMAP.sample_dir(ray.dir) }, depth);
             }
 
             let mat = unsafe { &MATERIALS[sect.mat] };
