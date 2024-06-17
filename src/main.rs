@@ -172,7 +172,7 @@ unsafe fn scene_furnace_test(args: &Args) -> Cam {
     loader::add_material("Inner", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("light", Mat::Light(Light::new(Vec3::ONE)));
 
-    let model_map = loader::create_model_map(vec![("Ineer", "Inner"), ("Outer", "light")]);
+    let model_map = loader::create_model_map(vec![("Inner", "Inner"), ("Outer", "light")]);
 
     loader::load_obj("res/furnace_test.obj", 1.0, Vec3::ZERO, model_map);
 

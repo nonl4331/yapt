@@ -71,8 +71,9 @@ impl TextureData {
         Ok(Self { data, dim })
     }
     pub fn sample(&self, uv: Vec2) -> Vec3 {
-        let x = uv.x.clamp(0.0, 1.0) * (self.dim[0] - 1) as f32;
-        let y = uv.y.clamp(0.0, 1.0) * (self.dim[1] - 1) as f32;
+        // since it's (theta, phi)
+        let x = uv.y.clamp(0.0, 1.0) * (self.dim[0] - 1) as f32;
+        let y = uv.x.clamp(0.0, 1.0) * (self.dim[1] - 1) as f32;
         let index = x as usize + y as usize * self.dim[0];
 
         self.data[index]
