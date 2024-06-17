@@ -22,7 +22,7 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
 }
 
 pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<String, String>) {
-    let (models, _) = tobj::load_obj(
+    let (models, mats) = tobj::load_obj(
         path,
         &tobj::LoadOptions {
             triangulate: true,
@@ -36,11 +36,22 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
     let mut total = 0;
 
     for m in models.iter() {
-        // load material
-        let mat_idx = model_map
-            .get(&m.name)
-            .map(|mat_name| MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0))
-            .unwrap_or(0);
+        // fallback to primitive name if materials don't exist
+        let mat_name = match mats {
+            Ok(ref mats) => m
+                .mesh
+                .material_id
+                .and_then(|i| mats.get(i).map(|mat| mat.name.clone())),
+            _ => Some(m.name.clone()),
+        };
+
+        let mat_idx = match mat_name {
+            Some(name) => model_map
+                .get(&name)
+                .map(|mat_name| MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0))
+                .unwrap_or(0),
+            None => 0,
+        };
 
         if mat_idx >= MATERIALS.len() {
             log::error!("material index {mat_idx} does not exist!");
