@@ -43,6 +43,7 @@ mod tests {
 
         test_material(name, mat, wo, &mut rng);
     }
+
     fn log_info(mat: &str, info: String) {
         log::info!("{mat}: {info}");
     }
@@ -71,7 +72,7 @@ mod tests {
     #[test]
     fn vndf() {
         let mut rng = thread_rng();
-        let wo = -generate_wo(&mut rng, true);
+        let wo = generate_wo(&mut rng, true);
         let a = rng.gen();
 
         let name = "ggx_vndf";
@@ -79,8 +80,8 @@ mod tests {
 
         log_info("ggx_vndf", format!("alpha: {a}"));
 
-        let sample = || -> Vec3 { mat.sample_vndf_local(-wo, &mut rng) };
-        let pdf = |wo: Vec3, wm: Vec3| -> f32 { mat.pdf_wm_vndf_local(-wo, wm) };
+        let sample = || -> Vec3 { mat.sample_vndf_local(wo, &mut rng) };
+        let pdf = |wo: Vec3, wm: Vec3| -> f32 { mat.vndf_local(wm, wo) };
 
         log_info(name, format!("wo: {wo}"));
 
@@ -89,8 +90,80 @@ mod tests {
         let sum = integrate_pdf(pdf, wo, name);
 
         log_info(name, format!("sum: {sum}"));
+        assert!((sum - 1.0).abs() < PDF_EPS, "sum = {sum}");
+    }
 
-        assert!((sum - 1.0).abs() < PDF_EPS);
+    #[test]
+    fn vndf_transformed() {
+        let mut rng = thread_rng();
+        let wo = generate_wo(&mut rng, true);
+        let a = rng.gen();
+
+        let name = "ggx_vndf_transformed";
+        let mat = Ggx::new(a, Vec3::ONE);
+
+        log_info("ggx_vndf_transformed", format!("alpha: {a}"));
+
+        let sample = || -> Vec3 {
+            let wm = mat.sample_vndf_local(wo, &mut rng);
+            wo.reflected(wm)
+        };
+        let pdf = |wo: Vec3, wi: Vec3| -> f32 {
+            let wm = (wo + wi).normalised();
+            mat.vndf_local(wm, wo) / (4.0 * wo.dot(wm))
+        };
+
+        log_info(name, format!("wo: {wo}"));
+
+        sample_image(sample, SAMPLES, name);
+
+        let sum = integrate_pdf(pdf, wo, name);
+
+        log_info(name, format!("sum: {sum}"));
+        assert!((sum - 1.0).abs() < PDF_EPS, "sum = {sum}");
+    }
+
+    // int NDF * cos theta = 1
+    // i.e. projected area = 1
+    #[test]
+    fn ndf_area() {
+        let mut rng = thread_rng();
+        let a = rng.gen();
+
+        let name = "ggx_ndf_area";
+        let mat = Ggx::new(a, Vec3::ONE);
+
+        let pdf = |_: Vec3, wm: Vec3| -> f32 { mat.ndf_local(wm) * wm.z };
+
+        log_info("ggx_ndf_area", format!("alpha: {a}"));
+
+        let sum = integrate_pdf(pdf, Vec3::ZERO, name);
+
+        log_info(name, format!("sum: {sum}"));
+        assert!((sum - 1.0).abs() < PDF_EPS, "sum = {sum}");
+    }
+
+    #[test]
+    fn weak_white_furnace() {
+        let mut rng = thread_rng();
+        let a = rng.gen();
+
+        let wo = generate_wo(&mut rng, true);
+
+        let name = "weak_white_furnace";
+        let mat = Ggx::new(a, Vec3::ONE);
+
+        let pdf = |wo: Vec3, wi: Vec3| -> f32 {
+            let wm = (wo + wi).normalised();
+            mat.ndf_local(wm) * mat.g1_local(wo, wm) / (4.0 * wo.z.abs())
+        };
+
+        log_info("weak_white_furnace", format!("alpha: {a}"));
+
+        let sum = integrate_pdf(pdf, wo, name);
+
+        log_info(name, format!("sum: {sum}"));
+        assert!((sum - 1.0).abs() < PDF_EPS, "sum = {sum}");
     }
 
     // uniform hemisphere/sphere sampling

@@ -28,6 +28,8 @@ pub struct Args {
     pub pssmlt: bool,
     #[arg(short, long)]
     pub environment_map: Option<String>,
+    #[arg(short, long, default_value_t = false)]
+    pub gui: bool,
 }
 
 pub fn run() {
@@ -84,38 +86,39 @@ fn generate_heatmap(cam: Cam, bvh: Bvh, args: Args) {
 }
 
 fn render_image(cam: Cam, bvh: Bvh, args: Args) {
-    let (send, recv) = std::sync::mpsc::channel();
-    let film = Film::new(recv, &args);
-    let child = film.child(send);
-
-    let film_thread = std::thread::spawn(move || film.run());
+    let (film_thread, child) = Film::new(&args);
 
     const CHUNK_SIZE: usize = 4096;
     let pixels = args.width as usize * args.height as usize;
 
-    (0..(pixels * args.samples as usize))
-        .into_par_iter()
-        .chunks(CHUNK_SIZE)
-        .enumerate()
-        .for_each(|(i, c)| {
-            let c = c.len();
-            let offset = CHUNK_SIZE * i;
-            let mut splats = child.clone().get_vec();
-            let mut rng = Pcg64Mcg::new(i as u128);
-            let mut rays = 0;
-            for idx in offset..(offset + c) {
-                let idx = idx % pixels;
-                let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
-                let (col, ray_count) = match args.integrator {
-                    IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
-                    IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE }),
-                };
-                splats.push(Splat::new(uv, col));
-                rays += ray_count;
-            }
-            let results = IntegratorResults::new(rays, splats);
-            child.clone().add_results(results);
-        });
+    for sample_i in 0..args.samples {
+        (0..pixels)
+            .into_par_iter()
+            .chunks(CHUNK_SIZE)
+            .enumerate()
+            .for_each(|(i, c)| {
+                let c = c.len();
+                let offset = CHUNK_SIZE * i;
+                let mut splats = child.clone().get_vec();
+                let mut rng = Pcg64Mcg::new(sample_i as u128 * pixels as u128 + i as u128);
+                let mut rays = 0;
+                for idx in offset..(offset + c) {
+                    let idx = idx % pixels;
+                    let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
+                    let (col, ray_count) = match args.integrator {
+                        IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
+                        IntegratorType::NEE => {
+                            NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE })
+                        }
+                    };
+                    splats.push(Splat::new(uv, col));
+                    rays += ray_count;
+                }
+                let results = IntegratorResults::new(rays, splats);
+                child.clone().add_results(results);
+            });
+        child.display_blocking();
+    }
 
     child.finish_render();
     let buffer = film_thread.join().unwrap();
@@ -148,11 +151,7 @@ fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
 
     let weight = distr.func_int as f64 / BOOTSTRAP_CHAINS as f64;
 
-    let (send, recv) = std::sync::mpsc::channel();
-    let film = Film::new(recv, &args);
-    let child = film.child(send);
-
-    let film_thread = std::thread::spawn(move || film.run());
+    let (film_thread, child) = Film::new(&args);
 
     let pixels = args.width as usize * args.height as usize;
     let total_mutations = pixels * mutations_per_pixel as usize;

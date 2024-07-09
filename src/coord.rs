@@ -7,6 +7,11 @@ pub struct Coordinate {
 }
 
 impl Coordinate {
+    pub const NOP: Self = Coordinate {
+        x: Vec3::X,
+        y: Vec3::Y,
+        z: Vec3::Z,
+    };
     pub fn new_from_z(z: Vec3) -> Self {
         let x = if z.x.abs() > z.y.abs() {
             Vec3::new(-z.z, 0.0, z.x) / (z.x * z.x + z.z * z.z).sqrt()
@@ -19,32 +24,61 @@ impl Coordinate {
             z,
         }
     }
-    pub fn create_inverse(&self) -> Self {
-        let x = Vec3::new(self.x.x, self.y.x, self.z.x);
-        let y = Vec3::new(self.x.y, self.y.y, self.z.y);
-        let z = Vec3::new(self.x.z, self.y.z, self.z.z);
-        Coordinate { x, y, z }
+    pub fn local_to_global(&self, vec: Vec3) -> Vec3 {
+        Vec3::new(
+            vec.x * self.x.x + vec.y * self.y.x + vec.z * self.z.x,
+            vec.x * self.x.y + vec.y * self.y.y + vec.z * self.z.y,
+            vec.x * self.x.z + vec.y * self.y.z + vec.z * self.z.z,
+        )
     }
-    pub fn to_coord(&self, vec: Vec3) -> Vec3 {
-        vec.x * self.x + vec.y * self.y + vec.z * self.z
+    pub fn global_to_local(&self, vec: Vec3) -> Vec3 {
+        Vec3::new(
+            vec.x * self.x.x + vec.y * self.x.y + vec.z * self.x.z,
+            vec.x * self.y.x + vec.y * self.y.y + vec.z * self.y.z,
+            vec.x * self.z.x + vec.y * self.z.y + vec.z * self.z.z,
+        )
     }
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use crate::random_unit_vector;
+
+    const ETA: f32 = 100.0 * f32::EPSILON;
 
     use super::*;
+    use rand::thread_rng;
+    use rand::Rng;
+
+    fn random_unit_vector() -> Vec3 {
+        let mut rng = thread_rng();
+
+        Vec3::new(rng.gen(), rng.gen(), rng.gen()).normalised()
+    }
 
     #[test]
     fn inverse() {
         let z = random_unit_vector();
-        let to = Coordinate::new_from_z(z);
-        let from = to.create_inverse();
+        let coord = Coordinate::new_from_z(z);
         let v = random_unit_vector();
         assert!(
-            (v - from.to_coord(to.to_coord(v))).mag_sq() < 0.000001
-                && (v - to.to_coord(from.to_coord(v))).mag_sq() < 0.000001
+            (v - coord.global_to_local(coord.local_to_global(v))).mag_sq() < ETA
+                && (v - coord.local_to_global(coord.global_to_local(v))).mag_sq() < ETA
         );
     }
-}*/
+
+    #[test]
+    fn random_coordiante_system() {
+        let rando_coord = random_unit_vector();
+        let coord = Coordinate::new_from_z(rando_coord);
+
+        assert!((coord.global_to_local(rando_coord) - Vec3::Z).mag_sq() < ETA);
+    }
+
+    #[test]
+    fn nop() {
+        let rando_vec = random_unit_vector();
+        let coord = Coordinate::NOP;
+        assert_eq!(coord.global_to_local(rando_vec), rando_vec);
+        assert_eq!(coord.local_to_global(rando_vec), rando_vec);
+    }
+}

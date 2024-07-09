@@ -1,10 +1,18 @@
 use crate::{prelude::*, startup::Args};
 use indicatif::{ProgressBar, ProgressStyle};
+use minifb::*;
+use rayon::prelude::*;
 
 use std::{
     sync::{mpsc, Arc, Mutex},
     time::Instant,
 };
+
+pub enum ToFilm {
+    Results(IntegratorResults),
+    DisplayImage,
+    FinishRender,
+}
 
 #[derive(new)]
 pub struct IntegratorResults {
@@ -21,12 +29,14 @@ pub struct Splat {
 pub struct Film {
     ready_to_use: Arc<Mutex<Vec<Vec<Splat>>>>,
     canvas: Vec<Vec3>,
-    receiver: mpsc::Receiver<IntegratorResults>,
+    receiver: mpsc::Receiver<ToFilm>,
     width: usize,
     height: usize,
     stats: FilmStats,
+    window: Option<(Window, Vec<u32>)>,
 }
 
+#[derive(Debug)]
 pub struct FilmStats {
     rays_shot: u64,
     splats_done: u64,
@@ -108,25 +118,59 @@ impl FilmStats {
 }
 
 impl Film {
-    pub fn new(receiver: mpsc::Receiver<IntegratorResults>, args: &Args) -> Self {
+    pub fn new(args: &Args) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
+        let (send_child, recv_child) = std::sync::mpsc::channel();
+
         let width = args.width as usize;
         let height = args.height as usize;
+        let gui = args.gui;
+        let stats = FilmStats::new(args);
 
-        Self {
-            ready_to_use: Default::default(),
-            canvas: vec![Vec3::ZERO; width * height],
-            receiver,
-            width,
-            height,
-            stats: FilmStats::new(args),
-        }
+        let thread = std::thread::spawn(move || {
+            let (send, recv) = std::sync::mpsc::channel();
+
+            let window = if gui {
+                Some({
+                    let mut w = Window::new("path tracer", width, height, WindowOptions::default())
+                        .unwrap();
+                    w.set_target_fps(60);
+                    (w, vec![0u32; width * height])
+                })
+            } else {
+                None
+            };
+
+            let film = Self {
+                ready_to_use: Default::default(),
+                canvas: vec![Vec3::ZERO; width * height],
+                receiver: recv,
+                width,
+                height,
+                stats,
+                window,
+            };
+            let child = film.child(send);
+
+            send_child.send(child).unwrap();
+
+            film.run()
+        });
+
+        (thread, recv_child.recv().unwrap())
     }
     pub fn run(mut self) -> Vec<Vec3> {
-        while let Ok(results) = self.receiver.recv() {
-            let IntegratorResults {
-                rays_shot: rays,
-                mut splats,
-            } = results;
+        while let Ok(to_film) = self.receiver.recv() {
+            let (rays, mut splats) = match to_film {
+                ToFilm::Results(IntegratorResults { rays_shot, splats }) => (rays_shot, splats),
+                ToFilm::DisplayImage => {
+                    self.display_blocking();
+                    continue;
+                }
+                ToFilm::FinishRender => {
+                    self.stats.finish();
+                    break;
+                }
+            };
 
             if splats.is_empty() {
                 self.stats.finish();
@@ -148,7 +192,7 @@ impl Film {
         }
     }
 
-    pub fn child(&self, sender: mpsc::Sender<IntegratorResults>) -> FilmChild {
+    pub fn child(&self, sender: mpsc::Sender<ToFilm>) -> FilmChild {
         FilmChild {
             ready_to_use: self.ready_to_use.clone(),
             sender,
@@ -163,17 +207,44 @@ impl Film {
 
         (y * self.width + x).min(self.width * self.height - 1)
     }
+    fn display_blocking(&mut self) {
+        if let Some((window, buf)) = self.window.as_mut() {
+            let mult = ((self.width * self.height) as f64 / self.stats.splats_done as f64) as f32;
+            buf.par_iter_mut()
+                .zip(self.canvas.par_iter())
+                .for_each(|(v, rgb)| {
+                    // scale based on samples
+                    let rgb = *rgb * mult;
+
+                    // gamma correction
+                    let r = rgb.x.powf(1.0 / 2.2);
+                    let g = rgb.y.powf(1.0 / 2.2);
+                    let b = rgb.z.powf(1.0 / 2.2);
+
+                    // convert to u32
+                    let r = ((r * 255.0) as u8) as u32;
+                    let g = ((g * 255.0) as u8) as u32;
+                    let b = ((b * 255.0) as u8) as u32;
+
+                    *v = r << 16 | g << 8 | b;
+                });
+
+            window
+                .update_with_buffer(&buf, self.width, self.height)
+                .unwrap();
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct FilmChild {
     ready_to_use: Arc<Mutex<Vec<Vec<Splat>>>>,
-    sender: mpsc::Sender<IntegratorResults>,
+    sender: mpsc::Sender<ToFilm>,
 }
 
 impl FilmChild {
     pub fn add_results(&self, results: IntegratorResults) {
-        self.sender.send(results).unwrap();
+        self.sender.send(ToFilm::Results(results)).unwrap();
     }
     pub fn get_vec(&self) -> Vec<Splat> {
         match self.ready_to_use.lock().unwrap().pop() {
@@ -182,8 +253,9 @@ impl FilmChild {
         }
     }
     pub fn finish_render(&self) {
-        self.sender
-            .send(IntegratorResults::new(0, Vec::new()))
-            .unwrap();
+        self.sender.send(ToFilm::FinishRender).unwrap();
+    }
+    pub fn display_blocking(&self) {
+        self.sender.send(ToFilm::DisplayImage).unwrap();
     }
 }

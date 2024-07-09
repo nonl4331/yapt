@@ -16,7 +16,7 @@ impl EnvMap {
     }
     pub fn sample_dir(&self, dir: Vec3) -> Vec3 {
         let theta = dir.z.acos() / PI;
-        let phi = dir.y.atan2(dir.x) / TAU;
+        let phi = (dir.y.atan2(dir.x) + PI) / TAU;
         self.sample(Vec2::new(theta, phi))
     }
 }
@@ -28,18 +28,6 @@ pub struct TextureData {
 
 impl TextureData {
     pub fn from_path(filepath: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        /*let img = image::open(filepath)?;
-
-        let (width, height) = img.dimensions();
-        let data = img
-            .pixels()
-            .map(|(_, _, pixel)| pixel.to_rgb().0.map(|v| v as f32 / 255.0).into())
-            .collect();
-
-        Ok(Self {
-            data,
-            dim: [width as usize, height as usize],
-        })*/
         use exr::prelude::*;
         let image = read_first_rgba_layer_from_file(
             filepath,

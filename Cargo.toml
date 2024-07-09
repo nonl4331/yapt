@@ -3,12 +3,16 @@ name = "yapt"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+debug = true
+
+[profile.test]
+opt-level = 2
 
 [dependencies]
 rayon = "1.8.0"
 image = "0.24.7"
-minifb = "0.25.0"
+minifb = "0.27.0"
 derive-new = "0.5.9"
 bvh = { path = "crates/bvh" }
 utility = { path = "crates/utility" }

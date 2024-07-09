@@ -12,7 +12,7 @@ impl Ggx {
         // don't allow a=0 due to floating point
         // large values of a also have slight
         // floating point issues such as a = 100
-        let a = a.max(0.001);
+        let a = a.max(0.0001);
         Self {
             a,
             a_sq: a.powi(2),
@@ -27,20 +27,37 @@ impl Ggx {
 
     pub fn sample(&self, normal: Vec3, wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
         let coord = crate::coord::Coordinate::new_from_z(normal);
-        let local_wo = coord.to_coord(wo);
-        let wm = self.sample_vndf_local(local_wo, rng);
-        let local_wi = local_wo.reflected(wm);
-        coord.create_inverse().to_coord(local_wi).normalised()
+        let local_wo = coord.global_to_local(wo);
+        let local_wm = self.sample_vndf_local(local_wo, rng);
+        let local_wi = local_wo.reflected(local_wm);
+        coord.local_to_global(local_wi).normalised()
     }
 
     pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
-        // transform to local
         let coord = crate::coord::Coordinate::new_from_z(sect.nor);
-        let wo = coord.to_coord(wo);
-        let wi = coord.to_coord(wi);
+        let wo = coord.global_to_local(wo);
+        let wi = coord.global_to_local(wi);
         let wm = (wo + wi).normalised();
         // f * g2 / g1 (Heitz2018GGX 19)
-        self.f(wm.dot(wo)) * self.g2_local(wo, wi) / self.g1_local(wo)
+        let g2 = self.g2_local(wo, wi, wm);
+        let f = self.f(wm.dot(wo));
+        let g1 = self.g1_local(wo, wm);
+        if g1 == 0.0 {
+            return Vec3::ZERO;
+        }
+        /*let p = self.pdf(wo, sect.nor, wi);
+        if p == 0.0 {
+            return Vec3::ZERO;
+        }
+        self.bxdf_cos(sect, wo, wi) / p*/
+        f * g2 / g1
+    }
+    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
+        let wo = coord.global_to_local(wo);
+        let wi = coord.global_to_local(wi);
+        let wm = (wo + wi).normalised();
+        self.f(wm.dot(wo)) * self.ndf_local(wo) * self.g2_local(wo, wi, wm) / wo.z
     }
 
     // local space (hemisphere on z=0 plane see section 2, definition)
@@ -54,7 +71,7 @@ impl Ggx {
 
         // transform intersection point back (section 2, importance sampling 3)
         Vec3::new(p_hemi.x * self.a, p_hemi.y * self.a, p_hemi.z).normalised()
-        // ^^ why is this * not /
+        // see pbrt v4 9.6.4 for why  * not /
     }
 
     // (section 3, listing 3)
@@ -67,46 +84,59 @@ impl Ggx {
         c + in_w_hemi
     }
 
-    // Dwm local (VNDF)
+    // by convention points away from surface (section 2, definition)
+    pub fn pdf(&self, wo: Vec3, nor: Vec3, wi: Vec3) -> f32 {
+        let coord = crate::coord::Coordinate::new_from_z(nor);
+        let local_wo = coord.global_to_local(wo);
+        let local_wi = coord.global_to_local(wi);
+        let local_wm = (local_wo + local_wi).normalised();
+        // Heitz2018GGX (17)
+        self.vndf_local(local_wm, local_wo) / (4.0 * local_wo.dot(local_wm))
+    }
+
+    // visible normal distribution function
+    // this is a valid PDF
     // wo is camera ray
-    pub fn pdf_wm_vndf_local(&self, wo: Vec3, wm: Vec3) -> f32 {
+    pub fn vndf_local(&self, wm: Vec3, wo: Vec3) -> f32 {
         if wm.z < 0.0 {
             return 0.0;
         }
-        self.g1_local(wo) * wo.dot(wm).max(0.0) * self.wm_dist_local(wm) / wo.z
+        self.g1_local(wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(wm) / wo.z
+        // see pbrt v4
     }
 
-    pub fn pdf(&self, wo: Vec3, nor: Vec3, wi: Vec3) -> f32 {
-        // by convention points away from surface (section 2, definition)
-        let coord = crate::coord::Coordinate::new_from_z(nor);
-        let local_wo = coord.to_coord(wo);
-        let local_wi = coord.to_coord(wi);
-        let local_wm = (local_wo + local_wi).normalised();
-        // Heitz2018GGX (17)
-        self.pdf_wm_vndf_local(local_wo, local_wm) / (4.0 * local_wo.dot(local_wm))
-    }
-
-    // Dwm local
-    fn wm_dist_local(&self, wm: Vec3) -> f32 {
-        let a_sq = self.a_sq;
-        let denom = self.a * (wm.x.powi(2) / a_sq + wm.y.powi(2) / a_sq + wm.z.powi(2));
-
-        FRAC_1_PI / denom.powi(2)
+    // normal distribution function
+    pub fn ndf_local(&self, wm: Vec3) -> f32 {
+        if wm.z <= 0.0 {
+            return 0.0;
+        }
+        FRAC_1_PI / (self.a_sq * ((wm.x.powi(2) + wm.y.powi(2)) / self.a_sq + wm.z.powi(2)).powi(2))
     }
 
     fn lambda(&self, w: Vec3) -> f32 {
+        // Heitz2018 (2)
+        // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
         let lambda = self.a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
-        0.5 * ((1.0 + lambda).sqrt() - 1.0)
+        let out = 0.5 * ((1.0 + lambda).sqrt() - 1.0);
+        assert!(out >= 0.0);
+        out
     }
 
-    fn g1_local(&self, w: Vec3) -> f32 {
+    pub fn g1_local(&self, w: Vec3, wm: Vec3) -> f32 {
+        if w.dot(wm) * w.z <= 0.0 {
+            return 0.0;
+        }
         let lambda = self.lambda(w);
         1.0 / (1.0 + lambda)
     }
 
     // Height correlated G2 (Heitz2014Microfacet 99)
-    fn g2_local(&self, in_w: Vec3, out_w: Vec3) -> f32 {
-        1.0 / (1.0 + self.lambda(in_w) + self.lambda(out_w))
+    fn g2_local(&self, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
+        let mut out = 1.0 / (1.0 + self.lambda(wa) + self.lambda(wb));
+        if wa.dot(wm) * wa.z <= 0.0 || wb.dot(wm) * wb.z <= 0.0 {
+            out = 0.0;
+        }
+        out
     }
     // fresnel
     fn f(&self, cos_theta: f32) -> Vec3 {

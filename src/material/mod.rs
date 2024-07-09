@@ -48,10 +48,11 @@ impl Mat {
             Self::Glossy(m) => m.pdf(wo, sect.nor, wi),
         }
     }
-    pub fn bxdf_cos(&self, sect: &Intersection, _wo: Vec3, wi: Vec3) -> Vec3 {
+    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
         match self {
             Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
             Self::Light(_) => unreachable!(),
+            Self::Glossy(m) => m.bxdf_cos(sect, wo, wi),
             _ => todo!(),
         }
     }
@@ -75,7 +76,7 @@ impl Matte {
         Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
     }
     pub fn sample(normal: Vec3, rng: &mut impl MinRng) -> Vec3 {
-        Coordinate::new_from_z(normal).to_coord(Self::sample_local(rng))
+        Coordinate::new_from_z(normal).local_to_global(Self::sample_local(rng))
     }
 
     pub fn pdf(outgoing: Vec3, normal: Vec3) -> f32 {

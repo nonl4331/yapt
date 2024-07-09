@@ -148,11 +148,16 @@ impl Tri {
         let v0 = unsafe { VERTICES[self.pos[0]] };
         let v1 = unsafe { VERTICES[self.pos[1]] };
         let v2 = unsafe { VERTICES[self.pos[2]] };
+        let n0 = unsafe { NORMALS[self.nor[0]] };
+        let n1 = unsafe { NORMALS[self.nor[1]] };
+        let n2 = unsafe { NORMALS[self.nor[2]] };
 
         let uv = rng.gen().sqrt();
         let uv = (1.0 - uv, uv * rng.gen());
 
-        let point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
+        let mut point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
+        let nor = uv.0 * n0 + uv.1 * n1 + (1.0 - uv.0 - uv.1) * n2;
+        point += nor * 0.000001;
 
         let dir = point - sect.pos;
 

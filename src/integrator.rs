@@ -17,7 +17,8 @@ impl Naive {
             let sect = get_intersection(&ray, bvh);
 
             if sect.is_none() {
-                return (unsafe { tp * ENVMAP.sample_dir(ray.dir) }, depth);
+                rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
+                break;
             }
 
             let mat = unsafe { &MATERIALS[sect.mat] };
@@ -30,7 +31,13 @@ impl Naive {
                 break;
             }
 
-            tp *= mat.eval(&sect, wo, ray.dir);
+            let eval = mat.eval(&sect, wo, ray.dir);
+            if eval == crate::MAGIC_VALUE_ONE_VEC {
+                return (Vec3::new(0.5, 0.0, 0.5), depth);
+            } else if eval == crate::MAGIC_VALUE_TWO_VEC {
+                return (Vec3::new(0.0, 1.0, 0.0), depth);
+            }
+            tp *= eval;
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
@@ -41,6 +48,7 @@ impl Naive {
             }
         }
         if rgb.contains_nan() {
+            log::warn!("NAN encountered!");
             return (Vec3::ZERO, 0);
         }
         (rgb, depth)
@@ -66,7 +74,9 @@ impl NEEMIS {
         let mut sect = get_intersection(&ray, bvh);
 
         if sect.is_none() {
-            return (Vec3::ZERO, ray_count);
+            unsafe {
+                return (ENVMAP.sample_dir(ray.dir), ray_count);
+            }
         }
 
         let mut mat = unsafe { &MATERIALS[sect.mat] };
@@ -85,7 +95,7 @@ impl NEEMIS {
             // ----
             // pick light
             let light_idx = rng.gen_range(0.0..(samplable.len() as f32)) as usize;
-            //let light_idx = *samplable.choose(rng).unwrap();
+            let light_idx = unsafe { SAMPLABLE[light_idx] };
             let light = unsafe { &TRIANGLES[light_idx] };
 
             // sample ray
@@ -119,7 +129,8 @@ impl NEEMIS {
             ray_count += 1;
             let new_sect = get_intersection(&ray, bvh);
             if new_sect.is_none() {
-                return (rgb, ray_count);
+                rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
+                break;
             }
 
             let new_mat = unsafe { &MATERIALS[new_sect.mat] };
@@ -161,6 +172,7 @@ impl NEEMIS {
         }
 
         if rgb.contains_nan() {
+            log::warn!("NAN encountered!");
             return (Vec3::ZERO, 0);
         }
 

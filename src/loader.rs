@@ -34,6 +34,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
     .unwrap();
 
     let mut total = 0;
+    let mut light_counter = 0;
 
     for m in models.iter() {
         // fallback to primitive name if materials don't exist
@@ -46,8 +47,8 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
         };
 
         let mat_idx = match mat_name {
-            Some(name) => model_map
-                .get(&name)
+            Some(ref name) => model_map
+                .get(name)
                 .map(|mat_name| MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0))
                 .unwrap_or(0),
             None => 0,
