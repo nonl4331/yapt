@@ -131,8 +131,8 @@ impl Film {
 
             let window = if gui {
                 Some({
-                    let mut w = Window::new("path tracer", width, height, WindowOptions::default())
-                        .unwrap();
+                    let mut w =
+                        Window::new("yapt", width, height, WindowOptions::default()).unwrap();
                     w.set_target_fps(60);
                     (w, vec![0u32; width * height])
                 })

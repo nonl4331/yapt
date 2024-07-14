@@ -34,10 +34,19 @@ impl Ggx {
     }
 
     pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        /*
+        // this also works (use this to test bxdf_cos & pdf regressions)
+        let p = self.pdf(wo, sect.nor, wi);
+        if p == 0.0 {
+            return Vec3::ZERO;
+        }
+        return self.bxdf_cos(sect, wo, wi) / p;*/
+
         let coord = crate::coord::Coordinate::new_from_z(sect.nor);
         let wo = coord.global_to_local(wo);
         let wi = coord.global_to_local(wi);
         let wm = (wo + wi).normalised();
+
         // f * g2 / g1 (Heitz2018GGX 19)
         let g2 = self.g2_local(wo, wi, wm);
         let f = self.f(wm.dot(wo));
@@ -45,11 +54,6 @@ impl Ggx {
         if g1 == 0.0 {
             return Vec3::ZERO;
         }
-        /*let p = self.pdf(wo, sect.nor, wi);
-        if p == 0.0 {
-            return Vec3::ZERO;
-        }
-        self.bxdf_cos(sect, wo, wi) / p*/
         f * g2 / g1
     }
     pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
@@ -57,7 +61,7 @@ impl Ggx {
         let wo = coord.global_to_local(wo);
         let wi = coord.global_to_local(wi);
         let wm = (wo + wi).normalised();
-        self.f(wm.dot(wo)) * self.ndf_local(wo) * self.g2_local(wo, wi, wm) / wo.z
+        self.f(wm.dot(wo)) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
     }
 
     // local space (hemisphere on z=0 plane see section 2, definition)
@@ -89,7 +93,10 @@ impl Ggx {
         let coord = crate::coord::Coordinate::new_from_z(nor);
         let local_wo = coord.global_to_local(wo);
         let local_wi = coord.global_to_local(wi);
-        let local_wm = (local_wo + local_wi).normalised();
+        let mut local_wm = (local_wo + local_wi).normalised();
+        if local_wm.z < 0.0 {
+            local_wm = -local_wm;
+        }
         // Heitz2018GGX (17)
         self.vndf_local(local_wm, local_wo) / (4.0 * local_wo.dot(local_wm))
     }
@@ -101,7 +108,7 @@ impl Ggx {
         if wm.z < 0.0 {
             return 0.0;
         }
-        self.g1_local(wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(wm) / wo.z
+        self.g1_local(wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(wm) / wo.z.abs()
         // see pbrt v4
     }
 
@@ -110,7 +117,8 @@ impl Ggx {
         if wm.z <= 0.0 {
             return 0.0;
         }
-        FRAC_1_PI / (self.a_sq * ((wm.x.powi(2) + wm.y.powi(2)) / self.a_sq + wm.z.powi(2)).powi(2))
+        let tmp = wm.z.powi(2) * (self.a_sq - 1.0) + 1.0;
+        self.a_sq * FRAC_1_PI / tmp.powi(2)
     }
 
     fn lambda(&self, w: Vec3) -> f32 {
@@ -123,7 +131,7 @@ impl Ggx {
     }
 
     pub fn g1_local(&self, w: Vec3, wm: Vec3) -> f32 {
-        if w.dot(wm) * w.z <= 0.0 {
+        if w.dot(wm) * wm.z <= 0.0 {
             return 0.0;
         }
         let lambda = self.lambda(w);

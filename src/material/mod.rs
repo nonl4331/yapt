@@ -49,11 +49,18 @@ impl Mat {
         }
     }
     pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        let wo = -wo;
         match self {
             Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
             Self::Light(_) => unreachable!(),
             Self::Glossy(m) => m.bxdf_cos(sect, wo, wi),
             _ => todo!(),
+        }
+    }
+    fn requires_local_space(&self) -> bool {
+        match self {
+            Self::Matte(_) | Self::Light(_) => false,
+            Self::Glossy(_) => true,
         }
     }
 }
