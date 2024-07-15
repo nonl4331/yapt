@@ -150,7 +150,7 @@ unsafe fn scene_one(args: &Args) -> Cam {
 }
 
 unsafe fn scene_car(args: &Args) -> Cam {
-    let test_mat = Mat::Glossy(Ggx::new(0.1, Vec3::X * 0.8));
+    let test_mat = Mat::Glossy(Ggx::new(0.01, Vec3::X * 0.8));
     loader::add_material("default", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.8)));
     loader::add_material("test", test_mat);

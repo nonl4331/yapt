@@ -104,19 +104,20 @@ impl NEEMIS {
             // check for obstructions
             ray_count += 1;
             let light_sect = intersect_idx(&light_ray, bvh, light_idx);
-            let mut light_pdf = 0.0;
             if !light_sect.is_none() {
-                light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
-            }
+                let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 
-            // add light contribution if path is reachable by bsdf
-            let light_bsdf_pdf = mat.spdf(&sect, wo, light_ray.dir);
-            if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
-                rgb += tp
-                    * power_heuristic(light_pdf, light_bsdf_pdf)
-                    * mat.bxdf_cos(&sect, wo, light_ray.dir)
-                    * light_le
-                    / light_pdf;
+                // add light contribution if path is reachable by bsdf
+                let light_bsdf_pdf = mat.spdf(&sect, wo, light_ray.dir);
+                if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
+                    //let wm = (light_ray.dir - wo).normalised();
+                    //return (wm.dot(-wo) * Vec3::Z, depth);
+                    rgb += tp
+                        * power_heuristic(light_pdf, light_bsdf_pdf)
+                        * mat.bxdf_cos(&sect, wo, light_ray.dir)
+                        * light_le
+                        / light_pdf;
+                }
             }
 
             // ----
@@ -125,6 +126,8 @@ impl NEEMIS {
             if mat.scatter(&sect, &mut ray, rng) {
                 unreachable!()
             }
+
+            tp *= mat.eval(&sect, wo, ray.dir);
 
             ray_count += 1;
             let new_sect = get_intersection(&ray, bvh);
@@ -135,8 +138,6 @@ impl NEEMIS {
 
             let new_mat = unsafe { &MATERIALS[new_sect.mat] };
             let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
-
-            tp *= mat.eval(&sect, wo, ray.dir);
 
             // hit samplable calculate weight
             if samplable.contains(&new_sect.id) {
