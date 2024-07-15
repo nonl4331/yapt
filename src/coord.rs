@@ -12,6 +12,7 @@ impl Coordinate {
         y: Vec3::Y,
         z: Vec3::Z,
     };
+    #[must_use]
     pub fn new_from_z(z: Vec3) -> Self {
         let x = if z.x.abs() > z.y.abs() {
             Vec3::new(-z.z, 0.0, z.x) / (z.x * z.x + z.z * z.z).sqrt()
@@ -24,6 +25,7 @@ impl Coordinate {
             z,
         }
     }
+    #[must_use]
     pub fn local_to_global(&self, vec: Vec3) -> Vec3 {
         Vec3::new(
             vec.x * self.x.x + vec.y * self.y.x + vec.z * self.z.x,
@@ -31,6 +33,7 @@ impl Coordinate {
             vec.x * self.x.z + vec.y * self.y.z + vec.z * self.z.z,
         )
     }
+    #[must_use]
     pub fn global_to_local(&self, vec: Vec3) -> Vec3 {
         Vec3::new(
             vec.x * self.x.x + vec.y * self.x.y + vec.z * self.x.z,

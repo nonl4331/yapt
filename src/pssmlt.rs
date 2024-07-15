@@ -98,7 +98,7 @@ impl<R: Rng> PssState<R> {
     pub fn ensure_ready(&mut self) {
         if self.state_idx >= self.state.len() {
             assert_eq!(self.state_idx, self.state.len());
-            self.state.push(Default::default());
+            self.state.push(Sample::default());
         }
 
         let sample = &mut self.state[self.state_idx];

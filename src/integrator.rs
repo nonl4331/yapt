@@ -6,6 +6,7 @@ const RUSSIAN_ROULETTE_THRESHOLD: u64 = 3;
 pub struct Naive {}
 
 impl Naive {
+    #[must_use]
     pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng) -> (Vec3, u64) {
         let (mut tp, mut rgb) = (Vec3::ONE, Vec3::ZERO);
 
@@ -58,6 +59,7 @@ impl Naive {
 pub struct NEEMIS {}
 
 impl NEEMIS {
+    #[must_use]
     pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng, samplable: &[usize]) -> (Vec3, u64) {
         if samplable.is_empty() {
             return Naive::rgb(ray, bvh, rng);
@@ -180,7 +182,7 @@ impl NEEMIS {
         (rgb, ray_count)
     }
 }
-
+#[must_use]
 fn get_intersection(ray: &Ray, bvh: &Bvh) -> Intersection {
     let mut sect = Intersection::NONE;
     for range in bvh.traverse(ray) {
@@ -192,7 +194,7 @@ fn get_intersection(ray: &Ray, bvh: &Bvh) -> Intersection {
     }
     sect
 }
-
+#[must_use]
 pub fn intersect_idx(ray: &Ray, bvh: &Bvh, idx: usize) -> Intersection {
     let sect = unsafe { TRIANGLES[idx].intersect(ray) };
     if sect.is_none() {
@@ -214,6 +216,7 @@ pub fn intersect_idx(ray: &Ray, bvh: &Bvh, idx: usize) -> Intersection {
 }
 
 #[inline]
+#[must_use]
 pub fn power_heuristic(pdf_a: f32, pdf_b: f32) -> f32 {
     let a_sq = pdf_a.powi(2);
     a_sq / (a_sq + pdf_b.powi(2))

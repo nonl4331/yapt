@@ -1,6 +1,6 @@
 use crate::{prelude::*, startup::Args};
 use indicatif::{ProgressBar, ProgressStyle};
-use minifb::*;
+use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 
 use std::{
@@ -50,6 +50,7 @@ pub struct FilmStats {
 }
 
 impl FilmStats {
+    #[must_use]
     pub fn new(args: &Args) -> Self {
         let bar = ProgressBar::new(args.samples).with_style(
             ProgressStyle::default_bar()
@@ -118,7 +119,8 @@ impl FilmStats {
 }
 
 impl Film {
-    pub fn new(args: &Args) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
+    #[must_use]
+    pub fn init(args: &Args) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
         let (send_child, recv_child) = std::sync::mpsc::channel();
 
         let width = args.width as usize;
@@ -141,7 +143,7 @@ impl Film {
             };
 
             let film = Self {
-                ready_to_use: Default::default(),
+                ready_to_use: Arc::default(),
                 canvas: vec![Vec3::ZERO; width * height],
                 receiver: recv,
                 width,
@@ -158,6 +160,7 @@ impl Film {
 
         (thread, recv_child.recv().unwrap())
     }
+    #[must_use]
     pub fn run(mut self) -> Vec<Vec3> {
         while let Ok(to_film) = self.receiver.recv() {
             let (rays, mut splats) = match to_film {
@@ -191,14 +194,13 @@ impl Film {
             self.canvas[idx] += splat.rgb;
         }
     }
-
+    #[must_use]
     pub fn child(&self, sender: mpsc::Sender<ToFilm>) -> FilmChild {
         FilmChild {
             ready_to_use: self.ready_to_use.clone(),
             sender,
         }
     }
-
     fn uv_to_idx(&self, uv: [f32; 2]) -> usize {
         assert!(uv[0] <= 1.0 && uv[1] <= 1.0);
 
@@ -230,7 +232,7 @@ impl Film {
                 });
 
             window
-                .update_with_buffer(&buf, self.width, self.height)
+                .update_with_buffer(buf, self.width, self.height)
                 .unwrap();
         }
     }
@@ -246,11 +248,9 @@ impl FilmChild {
     pub fn add_results(&self, results: IntegratorResults) {
         self.sender.send(ToFilm::Results(results)).unwrap();
     }
+    #[must_use]
     pub fn get_vec(&self) -> Vec<Splat> {
-        match self.ready_to_use.lock().unwrap().pop() {
-            Some(v) => v,
-            _ => Vec::new(),
-        }
+        self.ready_to_use.lock().unwrap().pop().unwrap_or_default()
     }
     pub fn finish_render(&self) {
         self.sender.send(ToFilm::FinishRender).unwrap();

@@ -21,7 +21,7 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
     hashmap
 }
 
-pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<String, String>) {
+pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap<String, String>) {
     let (models, mats) = tobj::load_obj(
         path,
         &tobj::LoadOptions {
@@ -34,9 +34,8 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
     .unwrap();
 
     let mut total = 0;
-    let mut light_counter = 0;
 
-    for m in models.iter() {
+    for m in &models {
         // fallback to primitive name if materials don't exist
         let mat_name = match mats {
             Ok(ref mats) => m
@@ -47,10 +46,9 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
         };
 
         let mat_idx = match mat_name {
-            Some(ref name) => model_map
-                .get(name)
-                .map(|mat_name| MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0))
-                .unwrap_or(0),
+            Some(ref name) => model_map.get(name).map_or(0, |mat_name| {
+                MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0)
+            }),
             None => 0,
         };
 
@@ -73,7 +71,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
                     mesh.positions[i + 1] * scale,
                     mesh.positions[i + 2] * scale,
                 ) + offset,
-            )
+            );
         }
 
         // load normals
@@ -83,7 +81,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: HashMap<
                 mesh.normals[i],
                 mesh.normals[i + 1],
                 mesh.normals[i + 2],
-            ))
+            ));
         }
 
         // create triangles

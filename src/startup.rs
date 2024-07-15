@@ -1,11 +1,14 @@
 use clap::Parser;
 
-use crate::envmap::TextureData;
 use crate::prelude::*;
-use crate::{camera::Cam, integrator::*, material::*, IntegratorType, Scene};
 use rand::thread_rng;
 use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
+
+const CHUNK_SIZE: usize = 4096;
+
+const BOOTSTRAP_CHAINS: usize = 100_000;
+const CHAINS: usize = 100;
 
 #[derive(Parser)]
 #[command(about, long_about = None)]
@@ -48,7 +51,7 @@ pub fn run() {
 
     let cam = unsafe { crate::setup_scene(&args) };
 
-    let bvh = unsafe { Bvh::new(&mut TRIANGLES) };
+    let bvh = unsafe { Bvh::new(&mut *addr_of_mut!(TRIANGLES)) };
 
     // calculate samplable objects after BVH rearranges TRIANGLES
     unsafe {
@@ -60,17 +63,15 @@ pub fn run() {
     }
 
     if args.bvh_heatmap {
-        generate_heatmap(cam, bvh, args);
+        generate_heatmap(&cam, &bvh, args);
+    } else if args.pssmlt {
+        render_image_pssmlt(&cam, &bvh, args);
     } else {
-        if args.pssmlt {
-            render_image_pssmlt(cam, bvh, args)
-        } else {
-            render_image(cam, bvh, args);
-        }
+        render_image(&cam, &bvh, args);
     }
 }
 
-fn generate_heatmap(cam: Cam, bvh: Bvh, args: Args) {
+fn generate_heatmap(cam: &Cam, bvh: &Bvh, args: Args) {
     let buf: Vec<_> = (0..(args.width * args.height))
         .into_par_iter()
         .map(|i| {
@@ -82,13 +83,12 @@ fn generate_heatmap(cam: Cam, bvh: Bvh, args: Args) {
     let max = *buf.iter().max().unwrap() as f32;
 
     let buf: Vec<_> = buf.into_iter().map(|v| heatmap(v as f32 / max)).collect();
-    save_image(buf, 1.0, args);
+    save_image(&buf, 1.0, args);
 }
 
-fn render_image(cam: Cam, bvh: Bvh, args: Args) {
-    let (film_thread, child) = Film::new(&args);
+fn render_image(cam: &Cam, bvh: &Bvh, args: Args) {
+    let (film_thread, child) = Film::init(&args);
 
-    const CHUNK_SIZE: usize = 4096;
     let pixels = args.width as usize * args.height as usize;
 
     let random_offset: u64 = rand::Rng::gen(&mut thread_rng());
@@ -110,9 +110,9 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
                     let idx = idx % pixels;
                     let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
                     let (col, ray_count) = match args.integrator {
-                        IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
+                        IntegratorType::Naive => Naive::rgb(ray, bvh, &mut rng),
                         IntegratorType::NEE => {
-                            NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE })
+                            NEEMIS::rgb(ray, bvh, &mut rng, unsafe { &*addr_of!(SAMPLABLE) })
                         }
                     };
                     splats.push(Splat::new(uv, col));
@@ -128,22 +128,23 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
     let buffer = film_thread.join().unwrap();
     let m = 1.0 / args.samples as f32;
 
-    save_image(buffer, m, args);
+    save_image(&buffer, m, args);
 }
 
-fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
+fn render_image_pssmlt(cam: &Cam, bvh: &Bvh, args: Args) {
     let mutations_per_pixel = args.samples;
 
     // bootstrap
-    const BOOTSTRAP_CHAINS: usize = 100_000;
     let contributions: Vec<_> = (0..BOOTSTRAP_CHAINS)
         .into_par_iter()
         .map(|i| {
             let mut rng = Pcg64Mcg::new(i as u128);
             let (_, ray) = cam.get_random_ray(&mut rng);
             let (rgb, _) = match args.integrator {
-                IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut rng),
-                IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut rng, unsafe { &SAMPLABLE }),
+                IntegratorType::Naive => Naive::rgb(ray, bvh, &mut rng),
+                IntegratorType::NEE => {
+                    NEEMIS::rgb(ray, bvh, &mut rng, unsafe { &*addr_of!(SAMPLABLE) })
+                }
             };
             scalar_contribution(rgb)
         })
@@ -155,12 +156,11 @@ fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
 
     let weight = distr.func_int as f64 / BOOTSTRAP_CHAINS as f64;
 
-    let (film_thread, child) = Film::new(&args);
+    let (film_thread, child) = Film::init(&args);
 
     let pixels = args.width as usize * args.height as usize;
     let total_mutations = pixels * mutations_per_pixel as usize;
 
-    const CHAINS: usize = 100;
     let chunk_size: usize = (total_mutations as f64 / CHAINS as f64) as usize;
 
     (0..total_mutations)
@@ -173,8 +173,10 @@ fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
             let mut pss = crate::pssmlt::PssState::new(Pcg64Mcg::new(i as u128));
             let (mut uv_cur, ray) = cam.get_random_ray(&mut pss);
             let (mut col_cur, ray_count) = match args.integrator {
-                IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut pss),
-                IntegratorType::NEE => NEEMIS::rgb(ray, &bvh, &mut pss, unsafe { &SAMPLABLE }),
+                IntegratorType::Naive => Naive::rgb(ray, bvh, &mut pss),
+                IntegratorType::NEE => {
+                    NEEMIS::rgb(ray, bvh, &mut pss, unsafe { &*addr_of!(SAMPLABLE) })
+                }
             };
             let mut rays = ray_count;
             let mut l_cur = scalar_contribution(col_cur);
@@ -182,51 +184,47 @@ fn render_image_pssmlt(cam: Cam, bvh: Bvh, args: Args) {
             // number of mutations to do for the current chain
             let c = c.len();
 
-            (0..c)
-                .into_iter()
-                .collect::<Vec<_>>()
-                .chunks(4096)
-                .for_each(|sc| {
-                    let mut splats = child.clone().get_vec();
-                    for _ in 0..sc.len() {
-                        pss.start_iteration();
-                        let (uv_prop, ray) = cam.get_random_ray(&mut pss);
-                        let (col_prop, ray_count) = match args.integrator {
-                            IntegratorType::Naive => Naive::rgb(ray, &bvh, &mut pss),
-                            IntegratorType::NEE => {
-                                NEEMIS::rgb(ray, &bvh, &mut pss, unsafe { &SAMPLABLE })
-                            }
-                        };
-                        let l_prop = scalar_contribution(col_prop);
-                        rays += ray_count;
-
-                        let accept = (l_prop / l_cur).min(1.0);
-                        splats.push(Splat::new(uv_prop, col_prop * accept / l_prop));
-                        splats.push(Splat::new(uv_cur, col_cur * (1.0 - accept) / l_cur));
-
-                        if aux_rng.gen() < accept {
-                            uv_cur = uv_prop;
-                            l_cur = l_prop;
-                            col_cur = col_prop;
-                            pss.accept();
-                        } else {
-                            pss.reject();
+            (0..c).collect::<Vec<_>>().chunks(4096).for_each(|sc| {
+                let mut splats = child.clone().get_vec();
+                for _ in 0..sc.len() {
+                    pss.start_iteration();
+                    let (uv_prop, ray) = cam.get_random_ray(&mut pss);
+                    let (col_prop, ray_count) = match args.integrator {
+                        IntegratorType::Naive => Naive::rgb(ray, bvh, &mut pss),
+                        IntegratorType::NEE => {
+                            NEEMIS::rgb(ray, bvh, &mut pss, unsafe { &*addr_of!(SAMPLABLE) })
                         }
+                    };
+                    let l_prop = scalar_contribution(col_prop);
+                    rays += ray_count;
+
+                    let accept = (l_prop / l_cur).min(1.0);
+                    splats.push(Splat::new(uv_prop, col_prop * accept / l_prop));
+                    splats.push(Splat::new(uv_cur, col_cur * (1.0 - accept) / l_cur));
+
+                    if aux_rng.gen() < accept {
+                        uv_cur = uv_prop;
+                        l_cur = l_prop;
+                        col_cur = col_prop;
+                        pss.accept();
+                    } else {
+                        pss.reject();
                     }
-                    let results = IntegratorResults::new(rays, splats);
-                    rays = 0;
-                    child.clone().add_results(results);
-                });
+                }
+                let results = IntegratorResults::new(rays, splats);
+                rays = 0;
+                child.clone().add_results(results);
+            });
         });
 
     child.finish_render();
     let buffer = film_thread.join().unwrap();
     let m = weight / mutations_per_pixel as f64;
 
-    save_image(buffer, m as f32, args);
+    save_image(&buffer, m as f32, args);
 }
 
-fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
+fn save_image(buffer: &[Vec3], m: f32, args: Args) {
     if args.bvh_heatmap {
         let img = image::Rgb32FImage::from_vec(
             args.width,
@@ -241,9 +239,9 @@ fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
         img.save(args.filename).unwrap();
     } else {
         use exr::image::write::WritableImage;
-        use exr::image::*;
+        use exr::image::{Encoding, Image, Layer, SpecificChannels};
         use exr::math;
-        use exr::meta::header::*;
+        use exr::meta::header::LayerAttributes;
         let dim = math::Vec2(args.width as usize, args.height as usize);
         let pixel_val = |pos: math::Vec2<usize>| {
             let i = pos.x() + pos.y() * args.width as usize;
@@ -251,8 +249,10 @@ fn save_image(buffer: Vec<Vec3>, m: f32, args: Args) {
             (rgb.x, rgb.y, rgb.z)
         };
 
-        let mut layer_attributes = LayerAttributes::default();
-        layer_attributes.white_luminance = Some(1000.0);
+        let layer_attributes = LayerAttributes {
+            white_luminance: Some(1000.0),
+            ..Default::default()
+        };
         let layer = Layer::new(
             dim,
             layer_attributes,

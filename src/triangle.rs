@@ -46,6 +46,7 @@ impl Aabound for Tri {
 }
 
 impl Tri {
+    #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Intersection {
         let v0 = unsafe { VERTICES[self.pos[0]] };
         let v1 = unsafe { VERTICES[self.pos[1]] };
@@ -144,6 +145,7 @@ impl Tri {
 
         Intersection::new(t, point, normal, out, self.mat, 0)
     }
+    #[must_use]
     pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl MinRng) -> (Ray, Vec3) {
         let v0 = unsafe { VERTICES[self.pos[0]] };
         let v1 = unsafe { VERTICES[self.pos[1]] };
@@ -167,6 +169,7 @@ impl Tri {
 
         (ray, le)
     }
+    #[must_use]
     pub fn pdf(&self, sect: &Intersection, ray: &Ray) -> f32 {
         let v0 = unsafe { VERTICES[self.pos[0]] };
         let v1 = unsafe { VERTICES[self.pos[1]] };

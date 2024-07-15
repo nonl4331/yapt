@@ -16,22 +16,26 @@ pub mod startup;
 pub mod triangle;
 
 pub mod prelude {
-    pub use crate::envmap::*;
-    pub use crate::film::*;
-    pub use crate::material::Mat;
-    pub use crate::pssmlt::MinRng;
-    pub use crate::triangle::Tri;
-    pub use crate::Intersection;
     pub use crate::{
-        ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        camera::Cam, envmap::*, film::*, integrator::*, material::*, pssmlt::MinRng, triangle::Tri,
+        IntegratorType, Intersection, Scene, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
+        SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
-    pub use std::f32::consts::*;
+    pub use std::{
+        f32::consts::*,
+        ptr::{addr_of, addr_of_mut},
+    };
     pub use utility::{Ray, Vec2, Vec3};
 }
 
-use crate::{camera::Cam, material::*, startup::Args, triangle::Tri};
+use crate::{
+    camera::Cam,
+    material::{Ggx, Light, Mat, Matte},
+    startup::Args,
+    triangle::Tri,
+};
 use once_cell::unsync::Lazy;
 use prelude::*;
 use std::{collections::HashMap, fmt};
@@ -72,6 +76,7 @@ pub enum Scene {
     Car,
     Sphere,
     SphereLeftRight,
+    FurnaceTest,
 }
 
 impl fmt::Display for Scene {
@@ -81,6 +86,7 @@ impl fmt::Display for Scene {
             Self::Car => "car",
             Self::Sphere => "sphere",
             Self::SphereLeftRight => "sphere_left_right",
+            Self::FurnaceTest => "furnace_test",
         };
         write!(f, "{s}")
     }
@@ -106,6 +112,8 @@ impl Intersection {
         id: 0,
     };
 
+    #[allow(clippy::float_cmp)]
+    #[must_use]
     pub fn is_none(&self) -> bool {
         self.t == -1.0
     }
@@ -123,6 +131,7 @@ unsafe fn setup_scene(args: &Args) -> Cam {
         Scene::Car => scene_car(args),
         Scene::Sphere => scene_sphere(args),
         Scene::SphereLeftRight => scene_sphere_left_right(args),
+        Scene::FurnaceTest => scene_furnace_test(args),
     }
 }
 
@@ -139,7 +148,7 @@ unsafe fn scene_one(args: &Args) -> Cam {
         ("ball2", "ball2"),
     ]);
 
-    loader::load_obj("res/one.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/one.obj", 1.0, Vec3::ZERO, &model_map);
 
     Cam::new(
         Vec3::new(0.0, -1.0, 1.0),
@@ -166,7 +175,7 @@ unsafe fn scene_car(args: &Args) -> Cam {
         ("BodyMat", "test"),
     ]);
 
-    loader::load_obj("res/sports_car.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/sports_car.obj", 1.0, Vec3::ZERO, &model_map);
 
     Cam::new(
         Vec3::new(2.0, -4.0, 1.0),
@@ -185,7 +194,7 @@ unsafe fn scene_sphere(args: &Args) -> Cam {
 
     let model_map = loader::create_model_map(vec![("default", "default")]);
 
-    loader::load_obj("res/sphere.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/sphere.obj", 1.0, Vec3::ZERO, &model_map);
 
     Cam::new(
         Vec3::new(0.0, -3.0, 0.0),
@@ -218,7 +227,7 @@ unsafe fn scene_sphere_left_right(args: &Args) -> Cam {
         ("left_light", "blue light"),
     ]);
 
-    loader::load_obj("res/sphere_left_right.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/sphere_left_right.obj", 1.0, Vec3::ZERO, &model_map);
 
     Cam::new(
         Vec3::new(0.0, -3.0, 2.0),
@@ -237,7 +246,7 @@ unsafe fn scene_furnace_test(args: &Args) -> Cam {
 
     let model_map = loader::create_model_map(vec![("Inner", "Inner"), ("Outer", "light")]);
 
-    loader::load_obj("res/furnace_test.obj", 1.0, Vec3::ZERO, model_map);
+    loader::load_obj("res/furnace_test.obj", 1.0, Vec3::ZERO, &model_map);
 
     Cam::new(
         Vec3::new(-4.0, 0.0, 0.0),

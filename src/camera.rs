@@ -10,6 +10,7 @@ pub struct Cam {
 }
 
 impl Cam {
+    #[must_use]
     pub fn new(
         origin: Vec3,
         look_at: Vec3,
@@ -32,15 +33,15 @@ impl Cam {
         let lower_left = origin - 0.5 * right - 0.5 * up + forward * focus_dist;
 
         Self {
-            origin,
             lower_left,
-            right,
             up,
+            right,
+            origin,
             width,
             height,
         }
     }
-
+    #[must_use]
     pub fn get_ray(&self, i: u64, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
         let (u, v) = (i % self.width as u64, i / self.width as u64);
         let (u, v) = (
@@ -56,6 +57,7 @@ impl Cam {
             ),
         )
     }
+    #[must_use]
     pub fn get_centre_ray(&self, i: u64) -> Ray {
         let (u, v) = (i % self.width as u64, i / self.width as u64);
         let (u, v) = (
@@ -67,6 +69,7 @@ impl Cam {
             self.lower_left + self.right * u + self.up * (1.0 - v) - self.origin,
         )
     }
+    #[must_use]
     pub fn get_random_ray(&self, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
         let (u, v) = (rng.gen(), rng.gen());
         (

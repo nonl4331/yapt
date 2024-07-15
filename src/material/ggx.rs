@@ -8,6 +8,7 @@ pub struct Ggx {
 }
 
 impl Ggx {
+    #[must_use]
     pub fn new(a: f32, ior: Vec3) -> Self {
         // don't allow a=0 due to floating point
         // large values of a also have slight
@@ -19,21 +20,22 @@ impl Ggx {
             ior,
         }
     }
+    #[must_use]
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         // by convention points away from surface hence the -ray.dir (section 2, definition)
         *ray = Ray::new(sect.pos, self.sample(sect.nor, -ray.dir, rng));
         false
     }
-
-    pub fn sample(&self, normal: Vec3, wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
+    #[must_use]
+    pub fn sample(&self, normal: Vec3, mut wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
         let coord = crate::coord::Coordinate::new_from_z(normal);
-        let local_wo = coord.global_to_local(wo);
-        let local_wm = self.sample_vndf_local(local_wo, rng);
-        let local_wi = local_wo.reflected(local_wm);
-        coord.local_to_global(local_wi).normalised()
+        wo = coord.global_to_local(wo);
+        let wm = self.sample_vndf_local(wo, rng);
+        let wi = wo.reflected(wm);
+        coord.local_to_global(wi).normalised()
     }
-
-    pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+    #[must_use]
+    pub fn eval(&self, wo: Vec3, wi: Vec3) -> Vec3 {
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
@@ -45,12 +47,13 @@ impl Ggx {
         }
         f * g2 / g1
     }
+    #[must_use]
     pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3) -> Vec3 {
         let wm = (wo + wi).normalised();
         self.f(wm.dot(wo)) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
     }
-
     // local space (hemisphere on z=0 plane see section 2, definition)
+    #[must_use]
     pub fn sample_vndf_local(&self, in_w: Vec3, rng: &mut impl MinRng) -> Vec3 {
         // map episoid to unit hemisphere (section 2, importance sampling 1)
         let in_w = Vec3::new(self.a * in_w.x, self.a * in_w.y, in_w.z).normalised();
@@ -63,8 +66,8 @@ impl Ggx {
         Vec3::new(p_hemi.x * self.a, p_hemi.y * self.a, p_hemi.z).normalised()
         // see pbrt v4 9.6.4 for why  * not /
     }
-
     // (section 3, listing 3)
+    #[must_use]
     fn sample_vndf_hemisphere(in_w_hemi: Vec3, rng: &mut impl MinRng) -> Vec3 {
         let phi = TAU * rng.gen();
         // can replace (1.0 - x) with x?
@@ -73,8 +76,8 @@ impl Ggx {
         let c = Vec3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), z);
         c + in_w_hemi
     }
-
     // by convention points away from surface (section 2, definition)
+    #[must_use]
     pub fn pdf(&self, wo: Vec3, wi: Vec3) -> f32 {
         let mut wm = (wo + wi).normalised();
         if wm.z < 0.0 {
@@ -83,10 +86,10 @@ impl Ggx {
         // Heitz2018GGX (17)
         self.vndf_local(wm, wo) / (4.0 * wo.dot(wm))
     }
-
     // visible normal distribution function
     // this is a valid PDF
     // wo is camera ray
+    #[must_use]
     pub fn vndf_local(&self, wm: Vec3, wo: Vec3) -> f32 {
         if wm.z < 0.0 {
             return 0.0;
@@ -94,8 +97,8 @@ impl Ggx {
         self.g1_local(wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(wm) / wo.z.abs()
         // see pbrt v4
     }
-
     // normal distribution function
+    #[must_use]
     pub fn ndf_local(&self, wm: Vec3) -> f32 {
         if wm.z <= 0.0 {
             return 0.0;
@@ -103,7 +106,7 @@ impl Ggx {
         let tmp = wm.z.powi(2) * (self.a_sq - 1.0) + 1.0;
         self.a_sq * FRAC_1_PI / tmp.powi(2)
     }
-
+    #[must_use]
     fn lambda(&self, w: Vec3) -> f32 {
         // Heitz2018 (2)
         // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
@@ -112,7 +115,7 @@ impl Ggx {
         assert!(out >= 0.0);
         out
     }
-
+    #[must_use]
     pub fn g1_local(&self, w: Vec3, wm: Vec3) -> f32 {
         if w.dot(wm) * wm.z <= 0.0 {
             return 0.0;
@@ -120,8 +123,8 @@ impl Ggx {
         let lambda = self.lambda(w);
         1.0 / (1.0 + lambda)
     }
-
     // Height correlated G2 (Heitz2014Microfacet 99)
+    #[must_use]
     fn g2_local(&self, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
         let mut out = 1.0 / (1.0 + self.lambda(wa) + self.lambda(wb));
         if wa.dot(wm) * wa.z <= 0.0 || wb.dot(wm) * wb.z <= 0.0 {
@@ -130,6 +133,7 @@ impl Ggx {
         out
     }
     // fresnel
+    #[must_use]
     fn f(&self, cos_theta: f32) -> Vec3 {
         self.ior + (1.0 - self.ior) * (1.0 - cos_theta).powi(5)
     }

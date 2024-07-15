@@ -8,10 +8,12 @@ pub struct Distribution1D {
 }
 
 impl Distribution1D {
+    #[must_use]
     pub fn new(values: &[f32]) -> Self {
-        if values.is_empty() {
-            panic!("Empty slice passed to Distribution1D::new!");
-        }
+        assert!(
+            !values.is_empty(),
+            "Empty slice passed to Distribution1D::new!"
+        );
 
         let n = values.len();
 
@@ -19,13 +21,13 @@ impl Distribution1D {
 
         for i in 1..=n {
             let last = intervals[i - 1];
-            intervals.push(last + values[i - 1] as f32);
+            intervals.push(last + values[i - 1]);
         }
 
         let func_int = intervals[n];
-        for (_, value) in intervals.iter_mut().enumerate() {
+        for value in &mut intervals {
             if func_int != 0.0 {
-                *value /= func_int as f32;
+                *value /= func_int;
             }
         }
 

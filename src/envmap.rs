@@ -8,12 +8,14 @@ pub enum EnvMap {
 impl EnvMap {
     pub const DEFAULT: Self = EnvMap::Solid(Vec3::ZERO);
 
+    #[must_use]
     pub fn sample(&self, uv: Vec2) -> Vec3 {
         match self {
             Self::Solid(v) => *v,
             Self::Image(v) => v.sample(uv),
         }
     }
+    #[must_use]
     pub fn sample_dir(&self, dir: Vec3) -> Vec3 {
         let theta = dir.z.acos() / PI;
         let phi = (dir.y.atan2(dir.x) + PI) / TAU;
@@ -56,8 +58,9 @@ impl TextureData {
             .map(|v| Vec3::new(v[0], v[1], v[2]))
             .collect();
 
-        Ok(Self { data, dim })
+        Ok(Self { dim, data })
     }
+    #[must_use]
     pub fn sample(&self, uv: Vec2) -> Vec3 {
         // since it's (theta, phi)
         let x = uv.y.clamp(0.0, 1.0) * (self.dim[0] - 1) as f32;
