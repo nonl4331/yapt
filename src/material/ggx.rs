@@ -34,17 +34,6 @@ impl Ggx {
     }
 
     pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
-        /*
-        // this also works (use this to test bxdf_cos & pdf regressions)
-        let p = self.pdf(wo, sect.nor, wi);
-        if p == 0.0 {
-            return Vec3::ZERO;
-        }
-        return self.bxdf_cos(sect, wo, wi) / p;*/
-
-        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
-        let wo = coord.global_to_local(wo);
-        let wi = coord.global_to_local(wi);
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
@@ -56,10 +45,7 @@ impl Ggx {
         }
         f * g2 / g1
     }
-    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
-        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
-        let wo = coord.global_to_local(wo);
-        let wi = coord.global_to_local(wi);
+    pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3) -> Vec3 {
         let wm = (wo + wi).normalised();
         self.f(wm.dot(wo)) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
     }
@@ -89,16 +75,13 @@ impl Ggx {
     }
 
     // by convention points away from surface (section 2, definition)
-    pub fn pdf(&self, wo: Vec3, nor: Vec3, wi: Vec3) -> f32 {
-        let coord = crate::coord::Coordinate::new_from_z(nor);
-        let local_wo = coord.global_to_local(wo);
-        let local_wi = coord.global_to_local(wi);
-        let mut local_wm = (local_wo + local_wi).normalised();
-        if local_wm.z < 0.0 {
-            local_wm = -local_wm;
+    pub fn pdf(&self, wo: Vec3, wi: Vec3) -> f32 {
+        let mut wm = (wo + wi).normalised();
+        if wm.z < 0.0 {
+            wm = -wm;
         }
         // Heitz2018GGX (17)
-        self.vndf_local(local_wm, local_wo) / (4.0 * local_wo.dot(local_wm))
+        self.vndf_local(wm, wo) / (4.0 * wo.dot(wm))
     }
 
     // visible normal distribution function

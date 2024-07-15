@@ -16,8 +16,12 @@ pub enum Mat {
 }
 
 impl Mat {
-    pub fn eval(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
-        let wo = -wo;
+    pub fn eval(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
+        wo = -wo;
+        if self.requires_local_space() {
+            (wo, wi) = self.to_local_space(sect, wo, wi);
+        }
+
         match self {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => m.albedo,
@@ -39,21 +43,27 @@ impl Mat {
         }
     }
     // scattering pdf
-    pub fn spdf(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> f32 {
+    pub fn spdf(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> f32 {
         // wo should be pointing away from the surface for BRDFs
-        let wo = -wo;
+        wo = -wo;
+        if self.requires_local_space() {
+            (wo, wi) = self.to_local_space(sect, wo, wi);
+        }
         match self {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
-            Self::Glossy(m) => m.pdf(wo, sect.nor, wi),
+            Self::Glossy(m) => m.pdf(wo, wi),
         }
     }
-    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
-        let wo = -wo;
+    pub fn bxdf_cos(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
+        wo = -wo;
+        if self.requires_local_space() {
+            (wo, wi) = self.to_local_space(sect, wo, wi);
+        }
         match self {
             Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
             Self::Light(_) => unreachable!(),
-            Self::Glossy(m) => m.bxdf_cos(sect, wo, wi),
+            Self::Glossy(m) => m.bxdf_cos(wo, wi),
             _ => todo!(),
         }
     }
@@ -62,6 +72,10 @@ impl Mat {
             Self::Matte(_) | Self::Light(_) => false,
             Self::Glossy(_) => true,
         }
+    }
+    fn to_local_space(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> (Vec3, Vec3) {
+        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
+        (coord.global_to_local(wo), coord.global_to_local(wi))
     }
 }
 
