@@ -91,6 +91,8 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
     const CHUNK_SIZE: usize = 4096;
     let pixels = args.width as usize * args.height as usize;
 
+    let random_offset: u64 = rand::Rng::gen(&mut thread_rng());
+
     for sample_i in 0..args.samples {
         (0..pixels)
             .into_par_iter()
@@ -100,7 +102,9 @@ fn render_image(cam: Cam, bvh: Bvh, args: Args) {
                 let c = c.len();
                 let offset = CHUNK_SIZE * i;
                 let mut splats = child.clone().get_vec();
-                let mut rng = Pcg64Mcg::new(sample_i as u128 * pixels as u128 + i as u128);
+                let mut rng = Pcg64Mcg::new(
+                    sample_i as u128 * pixels as u128 + i as u128 + random_offset as u128,
+                );
                 let mut rays = 0;
                 for idx in offset..(offset + c) {
                     let idx = idx % pixels;

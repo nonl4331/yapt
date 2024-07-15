@@ -71,6 +71,7 @@ pub enum Scene {
     One,
     Car,
     Sphere,
+    SphereLeftRight,
 }
 
 impl fmt::Display for Scene {
@@ -79,6 +80,7 @@ impl fmt::Display for Scene {
             Self::One => "one",
             Self::Car => "car",
             Self::Sphere => "sphere",
+            Self::SphereLeftRight => "sphere_left_right",
         };
         write!(f, "{s}")
     }
@@ -120,6 +122,7 @@ unsafe fn setup_scene(args: &Args) -> Cam {
         Scene::One => scene_one(args),
         Scene::Car => scene_car(args),
         Scene::Sphere => scene_sphere(args),
+        Scene::SphereLeftRight => scene_sphere_left_right(args),
     }
 }
 
@@ -154,7 +157,6 @@ unsafe fn scene_car(args: &Args) -> Cam {
     loader::add_material("default", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.8)));
     loader::add_material("test", test_mat);
-    //loader::add_material("test", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 3.0)));
 
     let model_map = loader::create_model_map(vec![
@@ -188,6 +190,39 @@ unsafe fn scene_sphere(args: &Args) -> Cam {
     Cam::new(
         Vec3::new(0.0, -3.0, 0.0),
         Vec3::new(0.0, 0.0, 0.0),
+        Vec3::Z,
+        70.0,
+        1.0,
+        args.width,
+        args.height,
+    )
+}
+
+unsafe fn scene_sphere_left_right(args: &Args) -> Cam {
+    let test_mat = Mat::Glossy(Ggx::new(0.001, Vec3::ONE));
+    loader::add_material("test mat", test_mat);
+    loader::add_material("diffuse", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material(
+        "orange light",
+        Mat::Light(Light::new(Vec3::new(1.0, 0.65, 0.0))),
+    );
+    loader::add_material(
+        "blue light",
+        Mat::Light(Light::new(Vec3::new(0.68, 0.85, 0.9))),
+    );
+
+    let model_map = loader::create_model_map(vec![
+        ("floor", "diffuse"),
+        ("sphere", "test mat"),
+        ("right_light", "orange light"),
+        ("left_light", "blue light"),
+    ]);
+
+    loader::load_obj("res/sphere_left_right.obj", 1.0, Vec3::ZERO, model_map);
+
+    Cam::new(
+        Vec3::new(0.0, -3.0, 2.0),
+        Vec3::new(0.0, 0.0, 2.0),
         Vec3::Z,
         70.0,
         1.0,
