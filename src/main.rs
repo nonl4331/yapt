@@ -17,9 +17,9 @@ pub mod triangle;
 
 pub mod prelude {
     pub use crate::{
-        camera::Cam, envmap::*, film::*, integrator::*, material::*, pssmlt::MinRng, triangle::Tri,
-        IntegratorType, Intersection, Scene, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
-        SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        camera::Cam, envmap::*, film::*, integrator::*, material::*, pssmlt::MinRng, startup::Args,
+        triangle::Tri, IntegratorType, Intersection, Scene, ENVMAP, HEIGHT, MATERIALS,
+        MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -156,8 +156,7 @@ unsafe fn scene_one(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args.width,
-        args.height,
+        args,
     )
 }
 
@@ -183,8 +182,7 @@ unsafe fn scene_car(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args.width,
-        args.height,
+        args,
     )
 }
 
@@ -202,8 +200,7 @@ unsafe fn scene_sphere(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args.width,
-        args.height,
+        args,
     )
 }
 
@@ -235,8 +232,7 @@ unsafe fn scene_sphere_left_right(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args.width,
-        args.height,
+        args,
     )
 }
 
@@ -254,8 +250,7 @@ unsafe fn scene_furnace_test(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args.width,
-        args.height,
+        args,
     )
 }
 

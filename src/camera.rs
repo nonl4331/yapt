@@ -17,12 +17,11 @@ impl Cam {
         mut up: Vec3,
         hfov: f32,
         focus_dist: f32,
-        width: u32,
-        height: u32,
+        args: &Args,
     ) -> Self {
         let forward = (look_at - origin).normalised();
         up.normalise();
-        let aspect_ratio = width as f32 / height as f32;
+        let aspect_ratio = args.width as f32 / args.height as f32;
 
         let right_mag = focus_dist * 2.0 * (0.5 * hfov.to_radians()).tan();
         let up_mag = right_mag / aspect_ratio;
@@ -31,14 +30,17 @@ impl Cam {
         let up = right.cross(forward).normalised() * up_mag;
 
         let lower_left = origin - 0.5 * right - 0.5 * up + forward * focus_dist;
+        let lower_left = lower_left + args.u_low * right + args.v_low * up;
+        let right = right * (args.u_high - args.u_low);
+        let up = up * (args.v_high - args.v_low);
 
         Self {
             lower_left,
             up,
             right,
             origin,
-            width,
-            height,
+            width: args.width,
+            height: args.height,
         }
     }
     #[must_use]

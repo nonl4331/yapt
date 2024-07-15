@@ -32,13 +32,7 @@ impl Naive {
                 break;
             }
 
-            let eval = mat.eval(&sect, wo, ray.dir);
-            if eval == crate::MAGIC_VALUE_ONE_VEC {
-                return (Vec3::new(0.5, 0.0, 0.5), depth);
-            } else if eval == crate::MAGIC_VALUE_TWO_VEC {
-                return (Vec3::new(0.0, 1.0, 0.0), depth);
-            }
-            tp *= eval;
+            tp *= mat.eval(&sect, wo, ray.dir);
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
@@ -112,8 +106,6 @@ impl NEEMIS {
                 // add light contribution if path is reachable by bsdf
                 let light_bsdf_pdf = mat.spdf(&sect, wo, light_ray.dir);
                 if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
-                    //let wm = (light_ray.dir - wo).normalised();
-                    //return (wm.dot(-wo) * Vec3::Z, depth);
                     rgb += tp
                         * power_heuristic(light_pdf, light_bsdf_pdf)
                         * mat.bxdf_cos(&sect, wo, light_ray.dir)
@@ -145,14 +137,10 @@ impl NEEMIS {
             if samplable.contains(&new_sect.id) {
                 let bsdf_light_pdf =
                     unsafe { TRIANGLES[new_sect.id].pdf(&new_sect, &ray) } * inverse_samplable;
-
                 tp *= power_heuristic(bsdf_pdf, bsdf_light_pdf);
             }
 
-            let le = new_mat.le(new_sect.pos, ray.dir);
-            if le != Vec3::ZERO {
-                rgb += tp * le;
-            }
+            rgb += tp * new_mat.le(new_sect.pos, ray.dir);
 
             if let Mat::Light(_) = new_mat {
                 break;

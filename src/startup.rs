@@ -33,10 +33,22 @@ pub struct Args {
     pub environment_map: Option<String>,
     #[arg(short, long, default_value_t = false)]
     pub gui: bool,
+    #[arg(long, default_value_t = 0.0)]
+    pub u_low: f32,
+    #[arg(long, default_value_t = 1.0)]
+    pub u_high: f32,
+    #[arg(long, default_value_t = 0.0)]
+    pub v_low: f32,
+    #[arg(long, default_value_t = 1.0)]
+    pub v_high: f32,
 }
 
 pub fn run() {
     let args = Args::parse();
+    assert!(args.u_low >= 0.0);
+    assert!(args.u_high >= args.u_low && args.u_low <= 1.0);
+    assert!(args.v_low >= 0.0);
+    assert!(args.v_high >= args.v_low && args.v_low <= 1.0);
 
     create_logger();
 
@@ -278,7 +290,7 @@ fn scalar_contribution(rgb: Vec3) -> f32 {
     // max is to avoid NAN
 }
 
-fn heatmap(t: f32) -> Vec3 {
+pub fn heatmap(t: f32) -> Vec3 {
     const C0: Vec3 = Vec3::new(-0.020390, 0.009557, 0.018508);
     const C1: Vec3 = Vec3::new(3.108226, -0.106297, -1.105891);
     const C2: Vec3 = Vec3::new(-14.539061, -2.943057, 14.548595);
