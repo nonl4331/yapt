@@ -11,9 +11,9 @@ opt-level = 2
 
 [dependencies]
 rayon = "1.8.0"
-image = "0.24.7"
+image = "0.25.1"
 minifb = "0.27.0"
-derive-new = "0.5.9"
+derive-new = "0.6.0"
 bvh = { path = "crates/bvh" }
 utility = { path = "crates/utility" }
 rand = "0.8.5"
@@ -26,4 +26,3 @@ clap = { version = "4.4.12", features = ["derive"] }
 rand_pcg = "0.3.1"
 exr = "1.71.0"
 rand_distr = "0.4.3"
-GSL = "7.0.0"
