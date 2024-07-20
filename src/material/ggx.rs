@@ -111,8 +111,8 @@ impl Ggx {
         // Heitz2018 (2)
         // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
         let lambda = self.a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
-        let out = 0.5 * ((1.0 + lambda).sqrt() - 1.0);
-        assert!(out >= 0.0);
+        // approx 1/100 billion change out < 0.0 due to floating point
+        let out = 0.5 * ((1.0 + lambda).sqrt() - 1.0).max(0.0);
         out
     }
     #[must_use]

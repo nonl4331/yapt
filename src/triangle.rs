@@ -128,11 +128,17 @@ impl Tri {
 
         let t = inv_det * t_scaled;
 
+        let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
+
         let n0 = unsafe { NORMALS[self.nor[0]] };
         let n1 = unsafe { NORMALS[self.nor[1]] };
         let n2 = unsafe { NORMALS[self.nor[2]] };
 
-        let mut normal = b0 * n0 + b1 * n1 + b2 * n2;
+        let normal = b0 * n0 + b1 * n1 + b2 * n2;
+        if gnormal.dot(normal) < 0.0 {
+            gnormal = -gnormal;
+        }
+        let mut normal = gnormal;
 
         let out = normal.dot(ray.dir) < 0.0;
         if !out {

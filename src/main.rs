@@ -160,30 +160,8 @@ unsafe fn scene_one(args: &Args) -> Cam {
     )
 }
 
-unsafe fn scene_car(args: &Args) -> Cam {
-    let test_mat = Mat::Glossy(Ggx::new(0.01, Vec3::X * 0.8));
-    loader::add_material("default", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.8)));
-    loader::add_material("test", test_mat);
-    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 3.0)));
-
-    let model_map = loader::create_model_map(vec![
-        ("default", "default"),
-        ("floor", "floor"),
-        ("light", "light"),
-        ("BodyMat", "test"),
-    ]);
-
-    loader::load_obj("res/sports_car.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(2.0, -4.0, 1.0),
-        Vec3::new(0.0, 0.0, 1.0),
-        Vec3::Z,
-        70.0,
-        1.0,
-        args,
-    )
+unsafe fn scene_car(_args: &Args) -> Cam {
+    unimplemented!();
 }
 
 unsafe fn scene_sphere(args: &Args) -> Cam {

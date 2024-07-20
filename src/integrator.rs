@@ -28,6 +28,8 @@ impl Naive {
 
             rgb += mat.le(sect.pos, ray.dir) * tp;
 
+            //return (sect.nor, 0);
+
             if mat.scatter(&sect, &mut ray, rng) {
                 break;
             }
@@ -137,10 +139,12 @@ impl NEEMIS {
             if samplable.contains(&new_sect.id) {
                 let bsdf_light_pdf =
                     unsafe { TRIANGLES[new_sect.id].pdf(&new_sect, &ray) } * inverse_samplable;
-                tp *= power_heuristic(bsdf_pdf, bsdf_light_pdf);
+                rgb += tp
+                    * power_heuristic(bsdf_pdf, bsdf_light_pdf)
+                    * new_mat.le(new_sect.pos, ray.dir);
+            } else {
+                rgb += tp * new_mat.le(new_sect.pos, ray.dir);
             }
-
-            rgb += tp * new_mat.le(new_sect.pos, ray.dir);
 
             if let Mat::Light(_) = new_mat {
                 break;
