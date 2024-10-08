@@ -77,6 +77,7 @@ pub enum Scene {
     Sphere,
     SphereLeftRight,
     FurnaceTest,
+    Room,
 }
 
 impl fmt::Display for Scene {
@@ -87,6 +88,7 @@ impl fmt::Display for Scene {
             Self::Sphere => "sphere",
             Self::SphereLeftRight => "sphere_left_right",
             Self::FurnaceTest => "furnace_test",
+            Self::Room => "room",
         };
         write!(f, "{s}")
     }
@@ -132,6 +134,7 @@ unsafe fn setup_scene(args: &Args) -> Cam {
         Scene::Sphere => scene_sphere(args),
         Scene::SphereLeftRight => scene_sphere_left_right(args),
         Scene::FurnaceTest => scene_furnace_test(args),
+        Scene::Room => scene_room(args),
     }
 }
 
@@ -224,6 +227,31 @@ unsafe fn scene_furnace_test(args: &Args) -> Cam {
 
     Cam::new(
         Vec3::new(-4.0, 0.0, 0.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::Z,
+        70.0,
+        1.0,
+        args,
+    )
+}
+
+unsafe fn scene_room(args: &Args) -> Cam {
+    loader::add_material("rest", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material("empty", Mat::Invisible);
+    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 1.0)));
+
+    let model_map = loader::create_model_map(vec![
+        ("grey_and_white_room:lambert2SG_light", "empty"),
+        ("lambert3SG", "empty"),
+        ("grey_and_white_room:Glass", "empty"),
+        ("grey_and_white_room:lambert2SG_light", "empty"),
+        ("light", "light"),
+    ]);
+
+    loader::load_obj("res/room.obj", 1.0, Vec3::ZERO, &model_map);
+
+    Cam::new(
+        Vec3::new(3.0, -3.0, 1.8),
         Vec3::new(0.0, 0.0, 0.0),
         Vec3::Z,
         70.0,

@@ -13,6 +13,7 @@ pub enum Mat {
     Matte(Matte),
     Light(Light),
     Glossy(Ggx),
+    Invisible,
 }
 
 impl Mat {
@@ -28,6 +29,7 @@ impl Mat {
             Self::Matte(m) => m.albedo,
             Self::Light(_) => unreachable!(),
             Self::Glossy(m) => m.eval(wo, wi),
+            Self::Invisible => Vec3::ONE,
         }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
@@ -35,12 +37,22 @@ impl Mat {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => true,
             Self::Glossy(m) => m.scatter(sect, ray, rng),
+            Self::Invisible => {
+                ray.origin = sect.pos - sect.nor * 0.00001;
+                false
+            }
+        }
+    }
+    pub fn is_delta(&self) -> bool {
+        match self {
+            Self::Invisible => true,
+            _ => false,
         }
     }
     #[must_use]
     pub fn le(&self, _pos: Vec3, _wo: Vec3) -> Vec3 {
         match self {
-            Self::Matte(_) | Self::Glossy(_) => Vec3::ZERO,
+            Self::Matte(_) | Self::Glossy(_) | Self::Invisible => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
         }
     }
@@ -56,6 +68,7 @@ impl Mat {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
             Self::Glossy(m) => m.pdf(wo, wi),
+            Self::Invisible => unreachable!(),
         }
     }
     #[must_use]
@@ -66,13 +79,13 @@ impl Mat {
         }
         match self {
             Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
-            Self::Light(_) => unreachable!(),
+            Self::Light(_) | Self::Invisible => unreachable!(),
             Self::Glossy(m) => m.bxdf_cos(wo, wi),
         }
     }
     fn requires_local_space(&self) -> bool {
         match self {
-            Self::Matte(_) | Self::Light(_) => false,
+            Self::Matte(_) | Self::Light(_) | Self::Invisible => false,
             Self::Glossy(_) => true,
         }
     }
