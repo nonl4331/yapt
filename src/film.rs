@@ -1,6 +1,6 @@
 use crate::{prelude::*, startup::Args};
+use egui::TextureHandle;
 use indicatif::{ProgressBar, ProgressStyle};
-use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 
 use std::{
@@ -33,7 +33,7 @@ pub struct Film {
     width: usize,
     height: usize,
     stats: FilmStats,
-    window: Option<(Window, Vec<u32>)>,
+    texture_handler: TextureHandle,
 }
 
 #[derive(Debug)]
@@ -120,27 +120,18 @@ impl FilmStats {
 
 impl Film {
     #[must_use]
-    pub fn init(args: &Args) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
+    pub fn init(
+        args: &Args,
+        texture_handler: TextureHandle,
+    ) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
         let (send_child, recv_child) = std::sync::mpsc::channel();
 
         let width = args.width as usize;
         let height = args.height as usize;
-        let gui = args.gui;
         let stats = FilmStats::new(args);
 
         let thread = std::thread::spawn(move || {
             let (send, recv) = std::sync::mpsc::channel();
-
-            let window = if gui {
-                Some({
-                    let mut w =
-                        Window::new("yapt", width, height, WindowOptions::default()).unwrap();
-                    w.set_target_fps(60);
-                    (w, vec![0u32; width * height])
-                })
-            } else {
-                None
-            };
 
             let film = Self {
                 ready_to_use: Arc::default(),
@@ -148,8 +139,8 @@ impl Film {
                 receiver: recv,
                 width,
                 height,
+                texture_handler,
                 stats,
-                window,
             };
             let child = film.child(send);
 
@@ -210,31 +201,33 @@ impl Film {
         (y * self.width + x).min(self.width * self.height - 1)
     }
     fn display_blocking(&mut self) {
-        if let Some((window, buf)) = self.window.as_mut() {
-            let mult = ((self.width * self.height) as f64 / self.stats.splats_done as f64) as f32;
-            buf.par_iter_mut()
-                .zip(self.canvas.par_iter())
-                .for_each(|(v, rgb)| {
-                    // scale based on samples
-                    let rgb = *rgb * mult;
+        let mult = ((self.width * self.height) as f64 / self.stats.splats_done as f64) as f32;
+        let buf = self
+            .canvas
+            .par_iter()
+            .map(|rgb| {
+                // scale based on samples
+                let rgb = *rgb * mult;
 
-                    // gamma correction
-                    let r = rgb.x.powf(1.0 / 2.2);
-                    let g = rgb.y.powf(1.0 / 2.2);
-                    let b = rgb.z.powf(1.0 / 2.2);
+                // gamma correction
+                let r = rgb.x.powf(1.0 / 2.2);
+                let g = rgb.y.powf(1.0 / 2.2);
+                let b = rgb.z.powf(1.0 / 2.2);
 
-                    // convert to u32
-                    let r = ((r * 255.0) as u8) as u32;
-                    let g = ((g * 255.0) as u8) as u32;
-                    let b = ((b * 255.0) as u8) as u32;
+                let r = (r * 255.0) as u8;
+                let g = (g * 255.0) as u8;
+                let b = (b * 255.0) as u8;
 
-                    *v = r << 16 | g << 8 | b;
-                });
+                egui::Color32::from_rgb(r, g, b)
+            })
+            .collect();
 
-            window
-                .update_with_buffer(buf, self.width, self.height)
-                .unwrap();
-        }
+        let raw_buf = egui::ColorImage {
+            size: [self.width, self.height],
+            pixels: buf,
+        };
+        self.texture_handler
+            .set(raw_buf, egui::TextureOptions::default());
     }
 }
 
