@@ -30,6 +30,7 @@ pub struct Film {
     ready_to_use: Arc<Mutex<Vec<Vec<Splat>>>>,
     canvas: Vec<Vec3>,
     receiver: mpsc::Receiver<ToFilm>,
+    context: egui::Context,
     width: usize,
     height: usize,
     stats: FilmStats,
@@ -123,6 +124,7 @@ impl Film {
     pub fn init(
         args: &Args,
         texture_handler: TextureHandle,
+        context: egui::Context,
     ) -> (std::thread::JoinHandle<Vec<Vec3>>, FilmChild) {
         let (send_child, recv_child) = std::sync::mpsc::channel();
 
@@ -140,6 +142,7 @@ impl Film {
                 width,
                 height,
                 texture_handler,
+                context,
                 stats,
             };
             let child = film.child(send);
@@ -228,6 +231,7 @@ impl Film {
         };
         self.texture_handler
             .set(raw_buf, egui::TextureOptions::default());
+        self.context.request_repaint();
     }
 }
 

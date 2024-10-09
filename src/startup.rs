@@ -53,15 +53,17 @@ pub enum AppState {
 
 pub struct App {
     fb_tex_handle: egui::TextureHandle,
+    context: egui::Context,
     args: Args,
     state: AppState,
 }
 
 impl App {
-    pub fn new(fb_tex_handle: egui::TextureHandle, args: Args) -> Self {
+    pub fn new(fb_tex_handle: egui::TextureHandle, args: Args, context: egui::Context) -> Self {
         Self {
             fb_tex_handle,
             args,
+            context,
             state: AppState::default(),
         }
     }
@@ -106,6 +108,7 @@ impl App {
         let mut new_self = Self {
             args: self.args.clone(),
             fb_tex_handle: self.fb_tex_handle.clone(),
+            context: self.context.clone(),
             state: AppState::Init,
         };
         std::mem::swap(&mut new_self, self);
@@ -144,7 +147,8 @@ impl App {
         let AppState::Render(cam, bvh) = &self.state else {
             return;
         };
-        let (film_thread, child) = Film::init(&self.args, self.fb_tex_handle.clone());
+        let (film_thread, child) =
+            Film::init(&self.args, self.fb_tex_handle.clone(), self.context.clone());
 
         let pixels = self.args.width as usize * self.args.height as usize;
 
@@ -215,7 +219,8 @@ impl App {
 
         let weight = distr.func_int as f64 / BOOTSTRAP_CHAINS as f64;
 
-        let (film_thread, child) = Film::init(&self.args, self.fb_tex_handle.clone());
+        let (film_thread, child) =
+            Film::init(&self.args, self.fb_tex_handle.clone(), self.context.clone());
 
         let pixels = self.args.width as usize * self.args.height as usize;
         let total_mutations = pixels * mutations_per_pixel as usize;
@@ -290,7 +295,7 @@ impl eframe::App for App {
             ui.heading("yapt");
             let size = self.fb_tex_handle.size_vec2();
             let sized_tex = egui::load::SizedTexture::new(&self.fb_tex_handle, size);
-            ui.add(egui::Image::new(sized_tex).fit_to_exact_size(size));
+            ui.add(egui::Image::new(sized_tex).shrink_to_fit().max_size(size));
             self.poll_state();
         });
     }
@@ -315,7 +320,7 @@ pub fn run() {
                 egui::TextureOptions::default(),
             );
 
-            let app = App::new(fb_handle, args.clone());
+            let app = App::new(fb_handle, args.clone(), cc.egui_ctx.clone());
 
             Ok(Box::new(app))
         }),
