@@ -4,6 +4,7 @@ use rayon::prelude::*;
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let mut updated = false;
         while let Ok(update) = self.update_recv.try_recv() {
             match update {
                 Update::Calculation(splats, _thread_id, _ray_count) => {
@@ -22,43 +23,46 @@ impl eframe::App for App {
                         };
 
                         self.canvas[idx] += splat.rgb;
+                        updated = true;
                     }
-
-                    // update texture
-                    let mult = ((self.args.width * self.args.height) as f64
-                        / self.splats_done as f64) as f32;
-                    let buf = self
-                        .canvas
-                        .par_iter()
-                        .map(|rgb| {
-                            // scale based on samples
-                            let rgb = *rgb * mult;
-
-                            // gamma correction
-                            let r = rgb.x.powf(1.0 / 2.2);
-                            let g = rgb.y.powf(1.0 / 2.2);
-                            let b = rgb.z.powf(1.0 / 2.2);
-
-                            let r = (r * 255.0) as u8;
-                            let g = (g * 255.0) as u8;
-                            let b = (b * 255.0) as u8;
-
-                            egui::Color32::from_rgb(r, g, b)
-                        })
-                        .collect();
-
-                    let raw_buf = egui::ColorImage {
-                        size: [self.args.width as usize, self.args.height as usize],
-                        pixels: buf,
-                    };
-                    self.fb_tex_handle
-                        .set(raw_buf, egui::TextureOptions::default());
-                    self.context.request_repaint();
                 }
                 Update::WorkQueueCleared => log::info!("Work queue cleared!"),
                 Update::PssmltBootstrapDone => log::info!("PSSMLT bootstrap done!"),
                 Update::NoState => log::info!("No state found!"),
             }
+        }
+
+        if updated {
+            // update texture
+            let mult =
+                ((self.args.width * self.args.height) as f64 / self.splats_done as f64) as f32;
+            let buf = self
+                .canvas
+                .par_iter()
+                .map(|rgb| {
+                    // scale based on samples
+                    let rgb = *rgb * mult;
+
+                    // gamma correction
+                    let r = rgb.x.powf(1.0 / 2.2);
+                    let g = rgb.y.powf(1.0 / 2.2);
+                    let b = rgb.z.powf(1.0 / 2.2);
+
+                    let r = (r * 255.0) as u8;
+                    let g = (g * 255.0) as u8;
+                    let b = (b * 255.0) as u8;
+
+                    egui::Color32::from_rgb(r, g, b)
+                })
+                .collect();
+
+            let raw_buf = egui::ColorImage {
+                size: [self.args.width as usize, self.args.height as usize],
+                pixels: buf,
+            };
+            self.fb_tex_handle
+                .set(raw_buf, egui::TextureOptions::default());
+            self.context.request_repaint();
         }
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
