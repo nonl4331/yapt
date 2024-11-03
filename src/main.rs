@@ -7,7 +7,6 @@ pub mod camera;
 pub mod coord;
 pub mod distributions;
 pub mod envmap;
-pub mod film;
 pub mod gui;
 pub mod integrator;
 pub mod loader;
@@ -15,12 +14,13 @@ pub mod material;
 pub mod pssmlt;
 pub mod scene;
 pub mod triangle;
+pub mod work_handler;
 
 pub mod prelude {
     pub use crate::{
-        camera::Cam, envmap::*, film::*, integrator::*, loader, material::*, pssmlt::MinRng,
-        scene::Scene, triangle::Tri, Args, IntegratorType, Intersection, ENVMAP, HEIGHT, MATERIALS,
-        MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        camera::Cam, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng, scene::Scene,
+        triangle::Tri, work_handler::*, Args, IntegratorType, Intersection, Splat, ENVMAP, HEIGHT,
+        MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -29,6 +29,7 @@ pub mod prelude {
         f32::consts::*,
         fmt,
         ptr::{addr_of, addr_of_mut},
+        sync::Arc,
     };
     pub use utility::{Ray, Vec2, Vec3};
 }
@@ -36,10 +37,6 @@ use prelude::*;
 
 use clap::Parser;
 use once_cell::unsync::Lazy;
-
-use rand::thread_rng;
-use rand_pcg::Pcg64Mcg;
-use rayon::prelude::*;
 
 const CHUNK_SIZE: usize = 4096;
 
@@ -64,6 +61,17 @@ const MAGIC_VALUE_TWO_VEC: Vec3 = Vec3::new(MAGIC_VALUE_TWO, MAGIC_VALUE_TWO, MA
 pub enum IntegratorType {
     Naive,
     NEE,
+}
+
+pub struct Splat {
+    uv: [f32; 2],
+    rgb: Vec3,
+}
+
+impl Splat {
+    pub fn new(uv: [f32; 2], rgb: Vec3) -> Self {
+        Self { uv, rgb }
+    }
 }
 
 impl fmt::Display for IntegratorType {
@@ -181,24 +189,35 @@ pub struct App {
     pub fb_tex_handle: egui::TextureHandle,
     pub context: egui::Context,
     pub args: Args,
-    pub state: AppState,
+    pub update_recv: std::sync::mpsc::Receiver<Update>,
+    pub work_req: std::sync::mpsc::Sender<ComputeChange>,
+    pub canvas: Vec<Vec3>,
+    pub splats_done: u64,
+    //pub state: AppState,
 }
 
 impl App {
     pub fn new(fb_tex_handle: egui::TextureHandle, args: Args, context: egui::Context) -> Self {
-        Self {
+        let (update_recv, work_req) = work_handler::create_work_handler();
+        let mut a = Self {
             fb_tex_handle,
             args,
             context,
-            state: AppState::default(),
-        }
+            update_recv,
+            work_req,
+            canvas: Vec::new(),
+            splats_done: 0,
+        };
+        a.init();
+        a
     }
-    pub fn init(&mut self) {
-        let AppState::Init = self.state else { return };
+    fn init(&mut self) {
         assert!(self.args.u_low >= 0.0);
         assert!(self.args.u_high >= self.args.u_low && self.args.u_low <= 1.0);
         assert!(self.args.v_low >= 0.0);
         assert!(self.args.v_high >= self.args.v_low && self.args.v_low <= 1.0);
+
+        self.canvas = vec![Vec3::ZERO; self.args.width as usize * self.args.height as usize];
 
         if let Some(ref path) = self.args.environment_map {
             if let Ok(image) = TextureData::from_path(path) {
@@ -212,6 +231,9 @@ impl App {
         let cam = unsafe { crate::scene::setup_scene(&self.args) };
 
         let bvh = unsafe { Bvh::new(&mut *addr_of_mut!(TRIANGLES)) };
+        unsafe {
+            BVH = bvh;
+        }
 
         // calculate samplable objects after BVH rearranges TRIANGLES
         unsafe {
@@ -221,245 +243,19 @@ impl App {
                 }
             }
         }
-        self.state = AppState::Render(cam, bvh);
-    }
-    pub fn poll_state(&mut self) {
-        self.init();
-        self.render();
-    }
-    pub fn render(&mut self) {
-        let AppState::Render(..) = self.state else {
-            return;
-        };
-        let mut new_self = Self {
-            args: self.args.clone(),
-            fb_tex_handle: self.fb_tex_handle.clone(),
-            context: self.context.clone(),
-            state: AppState::Init,
-        };
-        std::mem::swap(&mut new_self, self);
 
-        let thread = std::thread::spawn(move || {
-            if new_self.args.bvh_heatmap {
-                new_self.generate_heatmap();
-            } else if new_self.args.pssmlt {
-                new_self.render_image_pssmlt();
-            } else {
-                new_self.render_image();
-            }
-        });
-
-        self.state = AppState::Rendering(thread);
-    }
-    pub fn generate_heatmap(&self) {
-        let AppState::Render(cam, bvh) = &self.state else {
-            return;
-        };
-
-        let buf: Vec<_> = (0..(self.args.width * self.args.height))
-            .into_par_iter()
-            .map(|i| {
-                let ray = cam.get_centre_ray(i as u64);
-                bvh.traverse_steps(&ray)
-            })
-            .collect();
-
-        let max = *buf.iter().max().unwrap() as f32;
-
-        let buf: Vec<_> = buf.into_iter().map(|v| heatmap(v as f32 / max)).collect();
-        save_image(&buf, 1.0, &self.args);
-    }
-    fn render_image(&self) {
-        let AppState::Render(cam, bvh) = &self.state else {
-            return;
-        };
-        let (film_thread, child) =
-            Film::init(&self.args, self.fb_tex_handle.clone(), self.context.clone());
-
-        let pixels = self.args.width as usize * self.args.height as usize;
-
-        let random_offset: u64 = rand::Rng::gen(&mut thread_rng());
-
-        for sample_i in 0..self.args.samples {
-            (0..pixels)
-                .into_par_iter()
-                .chunks(CHUNK_SIZE)
-                .enumerate()
-                .for_each(|(i, c)| {
-                    let c = c.len();
-                    let offset = CHUNK_SIZE * i;
-                    let mut splats = child.clone().get_vec();
-                    let mut rng = Pcg64Mcg::new(
-                        sample_i as u128 * pixels as u128 + i as u128 + random_offset as u128,
-                    );
-                    let mut rays = 0;
-                    for idx in offset..(offset + c) {
-                        let idx = idx % pixels;
-                        let (uv, ray) = cam.get_ray(idx as u64, &mut rng);
-                        let (col, ray_count) = match self.args.integrator {
-                            IntegratorType::Naive => Naive::rgb(ray, bvh, &mut rng),
-                            IntegratorType::NEE => {
-                                NEEMIS::rgb(ray, bvh, &mut rng, unsafe { &*addr_of!(SAMPLABLE) })
-                            }
-                        };
-                        splats.push(Splat::new(uv, col));
-                        rays += ray_count;
-                    }
-                    let results = IntegratorResults::new(rays, splats);
-                    child.clone().add_results(results);
-                });
-            child.display_blocking();
-        }
-
-        child.finish_render();
-        let buffer = film_thread.join().unwrap();
-        let m = 1.0 / self.args.samples as f32;
-
-        save_image(&buffer, m, &self.args);
-    }
-    fn render_image_pssmlt(&self) {
-        let AppState::Render(cam, bvh) = &self.state else {
-            return;
-        };
-        let mutations_per_pixel = self.args.samples;
-
-        // bootstrap
-        let contributions: Vec<_> = (0..BOOTSTRAP_CHAINS)
-            .into_par_iter()
-            .map(|i| {
-                let mut rng = Pcg64Mcg::new(i as u128);
-                let (_, ray) = cam.get_random_ray(&mut rng);
-                let (rgb, _) = match self.args.integrator {
-                    IntegratorType::Naive => Naive::rgb(ray, bvh, &mut rng),
-                    IntegratorType::NEE => {
-                        NEEMIS::rgb(ray, bvh, &mut rng, unsafe { &*addr_of!(SAMPLABLE) })
-                    }
-                };
-                scalar_contribution(rgb)
-            })
-            .collect();
-
-        log::info!("bootstrap completed");
-
-        let distr = crate::distributions::Distribution1D::new(&contributions);
-
-        let weight = distr.func_int as f64 / BOOTSTRAP_CHAINS as f64;
-
-        let (film_thread, child) =
-            Film::init(&self.args, self.fb_tex_handle.clone(), self.context.clone());
-
-        let pixels = self.args.width as usize * self.args.height as usize;
-        let total_mutations = pixels * mutations_per_pixel as usize;
-
-        let chunk_size: usize = (total_mutations as f64 / CHAINS as f64) as usize;
-
-        (0..total_mutations)
-            .into_par_iter()
-            .chunks(chunk_size)
-            .for_each(|c| {
-                // rng to pick the stating state for this chain
-                let mut aux_rng = thread_rng();
-                let i = distr.sample(&mut aux_rng);
-                let mut pss = crate::pssmlt::PssState::new(Pcg64Mcg::new(i as u128));
-                let (mut uv_cur, ray) = cam.get_random_ray(&mut pss);
-                let (mut col_cur, ray_count) = match self.args.integrator {
-                    IntegratorType::Naive => Naive::rgb(ray, bvh, &mut pss),
-                    IntegratorType::NEE => {
-                        NEEMIS::rgb(ray, bvh, &mut pss, unsafe { &*addr_of!(SAMPLABLE) })
-                    }
-                };
-                let mut rays = ray_count;
-                let mut l_cur = scalar_contribution(col_cur);
-
-                // number of mutations to do for the current chain
-                let c = c.len();
-
-                (0..c).collect::<Vec<_>>().chunks(4096).for_each(|sc| {
-                    let mut splats = child.clone().get_vec();
-                    for _ in 0..sc.len() {
-                        pss.start_iteration();
-                        let (uv_prop, ray) = cam.get_random_ray(&mut pss);
-                        let (col_prop, ray_count) = match self.args.integrator {
-                            IntegratorType::Naive => Naive::rgb(ray, bvh, &mut pss),
-                            IntegratorType::NEE => {
-                                NEEMIS::rgb(ray, bvh, &mut pss, unsafe { &*addr_of!(SAMPLABLE) })
-                            }
-                        };
-                        let l_prop = scalar_contribution(col_prop);
-                        rays += ray_count;
-
-                        let accept = (l_prop / l_cur).min(1.0);
-                        splats.push(Splat::new(uv_prop, col_prop * accept / l_prop));
-                        splats.push(Splat::new(uv_cur, col_cur * (1.0 - accept) / l_cur));
-
-                        if aux_rng.gen() < accept {
-                            uv_cur = uv_prop;
-                            l_cur = l_prop;
-                            col_cur = col_prop;
-                            pss.accept();
-                        } else {
-                            pss.reject();
-                        }
-                    }
-                    let results = IntegratorResults::new(rays, splats);
-                    rays = 0;
-                    child.clone().add_results(results);
-                });
-            });
-
-        child.finish_render();
-        let buffer = film_thread.join().unwrap();
-        let m = weight / mutations_per_pixel as f64;
-
-        save_image(&buffer, m as f32, &self.args);
-    }
-}
-
-fn save_image(buffer: &[Vec3], m: f32, args: &Args) {
-    if args.bvh_heatmap {
-        let img = image::Rgb32FImage::from_vec(
-            args.width,
-            args.height,
-            buffer
-                .iter()
-                .flat_map(|v| [v.x * m, v.y * m, v.z * m])
-                .collect::<Vec<f32>>(),
-        )
-        .unwrap();
-
-        img.save(args.filename.clone()).unwrap();
-    } else {
-        use exr::image::write::WritableImage;
-        use exr::image::{Encoding, Image, Layer, SpecificChannels};
-        use exr::math;
-        use exr::meta::header::LayerAttributes;
-        let dim = math::Vec2(args.width as usize, args.height as usize);
-        let pixel_val = |pos: math::Vec2<usize>| {
-            let i = pos.x() + pos.y() * args.width as usize;
-            let rgb = buffer[i] * m;
-            (rgb.x, rgb.y, rgb.z)
-        };
-
-        let layer_attributes = LayerAttributes {
-            white_luminance: Some(1000.0),
-            ..Default::default()
-        };
-        let layer = Layer::new(
-            dim,
-            layer_attributes,
-            Encoding::FAST_LOSSLESS,
-            SpecificChannels::rgb(pixel_val),
+        let state = State::new(
+            cam,
+            self.args.width as usize,
+            self.args.height as usize,
+            self.context.clone(),
+            self.args.integrator,
+            0,
         );
-        let mut image = Image::from_layer(layer);
-        image.attributes.chromaticities = Some(exr::meta::attribute::Chromaticities {
-            red: math::Vec2(0.708, 0.292),
-            green: math::Vec2(0.170, 0.797),
-            blue: math::Vec2(0.131, 0.0046),
-            white: math::Vec2(0.3127, 0.3290),
-        });
-        image.attributes.pixel_aspect = 1.0;
 
-        image.write().to_file(args.filename.clone()).unwrap();
+        self.work_req
+            .send(ComputeChange::UpdateState(state))
+            .unwrap();
     }
 }
 
