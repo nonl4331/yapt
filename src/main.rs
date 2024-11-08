@@ -193,7 +193,10 @@ pub struct App {
     pub work_req: std::sync::mpsc::Sender<ComputeChange>,
     pub canvas: Vec<Vec3>,
     pub splats_done: u64,
-    //pub state: AppState,
+    pub work_start: std::time::Instant,
+    pub work_rays: u64,
+    pub last_update: std::time::Instant,
+    pub updated: bool,
 }
 
 impl App {
@@ -207,6 +210,10 @@ impl App {
             work_req,
             canvas: Vec::new(),
             splats_done: 0,
+            work_start: std::time::Instant::now(),
+            last_update: std::time::Instant::now(),
+            work_rays: 0,
+            updated: false,
         };
         a.init();
         a

@@ -9,7 +9,7 @@ use std::sync::{
 use crate::{Cam, IntegratorType, Naive, Splat, NEEMIS};
 
 const MIN_WORKGROUP_SIZE: u64 = 4096;
-const PARK_TIME: std::time::Duration = std::time::Duration::from_millis(200);
+const PARK_TIME: std::time::Duration = std::time::Duration::from_millis(20);
 
 // ------------------------------
 // Thread Communication
@@ -177,6 +177,7 @@ fn work_pixels(
 ) -> Update {
     let mut rays = 0;
     let mut splats = Vec::with_capacity((pixels.end - pixels.start) as usize);
+    let pn = pixels.end - pixels.start;
 
     let frame_pixels = (state.width * state.height) as u64;
     for pixel_i in pixels {
