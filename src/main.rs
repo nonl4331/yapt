@@ -19,8 +19,8 @@ pub mod work_handler;
 pub mod prelude {
     pub use crate::{
         camera::Cam, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng, scene::Scene,
-        triangle::Tri, work_handler::*, Args, IntegratorType, Intersection, Splat, ENVMAP, HEIGHT,
-        MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings, Splat,
+        ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -120,7 +120,7 @@ impl Intersection {
 fn main() {
     create_logger();
 
-    let args = Args::parse();
+    let args = RenderSettings::parse();
 
     eframe::run_native(
         "yapt",
@@ -146,7 +146,7 @@ fn main() {
 
 #[derive(Parser, Clone)]
 #[command(about, long_about = None)]
-pub struct Args {
+pub struct RenderSettings {
     #[arg(short, default_value_t = false)]
     pub bvh_heatmap: bool,
     #[arg(short, long, default_value_t = crate::WIDTH)]
@@ -165,8 +165,6 @@ pub struct Args {
     pub pssmlt: bool,
     #[arg(short, long)]
     pub environment_map: Option<String>,
-    #[arg(short, long, default_value_t = false)]
-    pub gui: bool,
     #[arg(long, default_value_t = 0.0)]
     pub u_low: f32,
     #[arg(long, default_value_t = 1.0)]
@@ -177,34 +175,36 @@ pub struct Args {
     pub v_high: f32,
 }
 
-#[derive(Default)]
-pub enum AppState {
-    #[default]
-    Init,
-    Render(Cam, Bvh),
-    Rendering(std::thread::JoinHandle<()>),
-}
-
 pub struct App {
+    pub render_settings: RenderSettings,
+    // egui state
     pub fb_tex_handle: egui::TextureHandle,
     pub context: egui::Context,
-    pub args: Args,
+    // communication
     pub update_recv: std::sync::mpsc::Receiver<Update>,
     pub work_req: std::sync::mpsc::Sender<ComputeChange>,
+    // state
     pub canvas: Vec<Vec3>,
     pub splats_done: u64,
-    pub work_start: std::time::Instant,
     pub work_rays: u64,
+    // work statistics
+    pub work_start: std::time::Instant,
     pub last_update: std::time::Instant,
     pub updated: bool,
+    // gui state
+    pub display_settings: bool,
 }
 
 impl App {
-    pub fn new(fb_tex_handle: egui::TextureHandle, args: Args, context: egui::Context) -> Self {
+    pub fn new(
+        fb_tex_handle: egui::TextureHandle,
+        render_settings: RenderSettings,
+        context: egui::Context,
+    ) -> Self {
         let (update_recv, work_req) = work_handler::create_work_handler();
         let mut a = Self {
             fb_tex_handle,
-            args,
+            render_settings,
             context,
             update_recv,
             work_req,
@@ -214,19 +214,21 @@ impl App {
             last_update: std::time::Instant::now(),
             work_rays: 0,
             updated: false,
+            display_settings: false,
         };
         a.init();
         a
     }
     fn init(&mut self) {
-        assert!(self.args.u_low >= 0.0);
-        assert!(self.args.u_high >= self.args.u_low && self.args.u_low <= 1.0);
-        assert!(self.args.v_low >= 0.0);
-        assert!(self.args.v_high >= self.args.v_low && self.args.v_low <= 1.0);
+        let rs = &mut self.render_settings;
+        assert!(rs.u_low >= 0.0);
+        assert!(rs.u_high >= rs.u_low && rs.u_low <= 1.0);
+        assert!(rs.v_low >= 0.0);
+        assert!(rs.v_high >= rs.v_low && rs.v_low <= 1.0);
 
-        self.canvas = vec![Vec3::ZERO; self.args.width as usize * self.args.height as usize];
+        self.canvas = vec![Vec3::ZERO; rs.width as usize * rs.height as usize];
 
-        if let Some(ref path) = self.args.environment_map {
+        if let Some(ref path) = rs.environment_map {
             if let Ok(image) = TextureData::from_path(path) {
                 unsafe { crate::ENVMAP = EnvMap::Image(image) };
                 log::info!("Loaded envmap");
@@ -235,7 +237,7 @@ impl App {
             }
         }
 
-        let cam = unsafe { crate::scene::setup_scene(&self.args) };
+        let cam = unsafe { crate::scene::setup_scene(&rs) };
 
         let bvh = unsafe { Bvh::new(&mut *addr_of_mut!(TRIANGLES)) };
         unsafe {
@@ -253,10 +255,10 @@ impl App {
 
         let state = State::new(
             cam,
-            self.args.width as usize,
-            self.args.height as usize,
+            rs.width as usize,
+            rs.height as usize,
             self.context.clone(),
-            self.args.integrator,
+            rs.integrator,
             0,
         );
 

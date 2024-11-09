@@ -22,17 +22,17 @@ impl fmt::Display for Scene {
         write!(f, "{s}")
     }
 }
-pub unsafe fn setup_scene(args: &Args) -> Cam {
-    match args.scene {
-        Scene::One => scene_one(args),
-        Scene::Car => scene_car(args),
-        Scene::Sphere => scene_sphere(args),
-        Scene::SphereLeftRight => scene_sphere_left_right(args),
-        Scene::FurnaceTest => scene_furnace_test(args),
-        Scene::Room => scene_room(args),
+pub unsafe fn setup_scene(render_settings: &RenderSettings) -> Cam {
+    match render_settings.scene {
+        Scene::One => scene_one(render_settings),
+        Scene::Car => scene_car(render_settings),
+        Scene::Sphere => scene_sphere(render_settings),
+        Scene::SphereLeftRight => scene_sphere_left_right(render_settings),
+        Scene::FurnaceTest => scene_furnace_test(render_settings),
+        Scene::Room => scene_room(render_settings),
     }
 }
-unsafe fn scene_one(args: &Args) -> Cam {
+unsafe fn scene_one(render_settings: &RenderSettings) -> Cam {
     loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("ball1", Mat::Matte(Matte::new(Vec3::new(0.5, 0.8, 0.8))));
     loader::add_material("ball2", Mat::Matte(Matte::new(Vec3::new(0.8, 0.0, 0.0))));
@@ -53,15 +53,15 @@ unsafe fn scene_one(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args,
+        render_settings,
     )
 }
 
-unsafe fn scene_car(_args: &Args) -> Cam {
+unsafe fn scene_car(_render_settings: &RenderSettings) -> Cam {
     unimplemented!();
 }
 
-unsafe fn scene_sphere(args: &Args) -> Cam {
+unsafe fn scene_sphere(render_settings: &RenderSettings) -> Cam {
     let test_mat = Mat::Glossy(Ggx::new(0.001, Vec3::ONE));
     loader::add_material("default", test_mat);
 
@@ -75,11 +75,11 @@ unsafe fn scene_sphere(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args,
+        render_settings,
     )
 }
 
-unsafe fn scene_sphere_left_right(args: &Args) -> Cam {
+unsafe fn scene_sphere_left_right(render_settings: &RenderSettings) -> Cam {
     let test_mat = Mat::Glossy(Ggx::new(0.001, Vec3::ONE));
     loader::add_material("test mat", test_mat);
     loader::add_material("diffuse", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
@@ -107,11 +107,11 @@ unsafe fn scene_sphere_left_right(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args,
+        render_settings,
     )
 }
 
-unsafe fn scene_furnace_test(args: &Args) -> Cam {
+unsafe fn scene_furnace_test(render_settings: &RenderSettings) -> Cam {
     loader::add_material("Inner", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("light", Mat::Light(Light::new(Vec3::ONE)));
 
@@ -125,11 +125,11 @@ unsafe fn scene_furnace_test(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args,
+        render_settings,
     )
 }
 
-unsafe fn scene_room(args: &Args) -> Cam {
+unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
     loader::add_material("rest", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
     loader::add_material("empty", Mat::Invisible);
     loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 1.0)));
@@ -150,6 +150,6 @@ unsafe fn scene_room(args: &Args) -> Cam {
         Vec3::Z,
         70.0,
         1.0,
-        args,
+        render_settings,
     )
 }
