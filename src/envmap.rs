@@ -25,7 +25,7 @@ impl EnvMap {
 
 pub struct TextureData {
     dim: [usize; 2],
-    data: Vec<Vec3>,
+    pub data: Vec<Vec3>,
 }
 
 impl TextureData {

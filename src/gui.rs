@@ -12,7 +12,9 @@ impl eframe::App for App {
         // -----------------------------------------------
         while let Ok(update) = self.update_recv.try_recv() {
             match update {
-                Update::Calculation(splats, _thread_id, ray_count) => {
+                Update::Calculation(splats, workload_id, ray_count)
+                    if workload_id == self.workload_id =>
+                {
                     self.splats_done += splats.len() as u64;
                     if self.splats_done == rs.width as u64 * rs.height as u64 * rs.samples {
                         println!(
@@ -40,6 +42,9 @@ impl eframe::App for App {
                         self.updated = true;
                     }
                     self.work_rays += ray_count;
+                }
+                Update::Calculation(_, workload_id, _) => {
+                    log::trace!("Got splats from previous workload {workload_id}!")
                 }
                 Update::WorkQueueCleared => log::info!("Work queue cleared!"),
                 Update::PssmltBootstrapDone => log::info!("PSSMLT bootstrap done!"),
@@ -84,29 +89,59 @@ impl eframe::App for App {
             self.updated = false;
             self.last_update = std::time::Instant::now();
         }
+        let old_samples = rs.samples;
+        if ctx.input(|i| i.key_released(egui::Key::W)) {
+            unsafe {
+                CAM.origin += Vec3::Y * 0.01;
+                CAM.lower_left += Vec3::Y * 0.01;
+            }
+            self.next_workload();
+            self.work_start = std::time::Instant::now();
+            self.render_settings.samples = old_samples;
+            self.work_req
+                .send(ComputeChange::WorkSamples(old_samples, self.workload_id))
+                .unwrap();
+        } else if ctx.input(|i| i.key_released(egui::Key::S)) {
+            unsafe {
+                CAM.origin -= Vec3::Y * 0.01;
+                CAM.lower_left -= Vec3::Y * 0.01;
+            }
+            self.next_workload();
+            self.work_start = std::time::Instant::now();
+            self.render_settings.samples = old_samples;
+            self.work_req
+                .send(ComputeChange::WorkSamples(old_samples, self.workload_id))
+                .unwrap();
+        }
+
+        let rs = &mut self.render_settings;
 
         // -----------------------------------------------
         // Draw GUI
         // -----------------------------------------------
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            ui.menu_button("File", |ui| ui.button("Export Camera"));
-            if ui.button("Start Render").clicked() {
-                rs.samples = 1000;
-                self.work_req
-                    .send(ComputeChange::WorkSamples(rs.samples))
-                    .unwrap();
-                self.work_rays = 0;
-                self.work_start = std::time::Instant::now();
-            }
-            if ui.button("Show render settings").clicked() {
-                self.display_settings = true;
-            }
-            ui.label(format!(
-                "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
-                (self.work_rays as f64 / self.work_start.elapsed().as_secs_f64()) / 1000000 as f64,
-                self.work_rays,
-                self.work_start.elapsed().as_secs_f64()
-            ));
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| ui.button("Export Camera"));
+                if ui.button("Add 1k samples").clicked() {
+                    if rs.samples == 0 {
+                        self.work_start = std::time::Instant::now();
+                    }
+                    rs.samples += 1000;
+                    self.work_req
+                        .send(ComputeChange::WorkSamples(1000, self.workload_id))
+                        .unwrap();
+                }
+                if ui.button("Show render settings").clicked() {
+                    self.display_settings = true;
+                }
+                ui.label(format!(
+                    "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
+                    (self.work_rays as f64 / self.work_start.elapsed().as_secs_f64())
+                        / 1000000 as f64,
+                    self.work_rays,
+                    self.work_start.elapsed().as_secs_f64()
+                ));
+            });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             let size = self.fb_tex_handle.size_vec2();
@@ -118,6 +153,13 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.label(format!("width: {}", rs.width));
                 ui.label(format!("height: {}", rs.height));
+                ui.label(format!("samples: {}", rs.samples));
+                ui.label(format!(
+                    "u: [{}..{})\nv: [{}..{})",
+                    rs.u_low, rs.u_high, rs.v_low, rs.v_high
+                ));
+                ui.label(format!("output filename: {}", rs.filename));
+                ui.label(format!("use PSSMLT: {}", rs.pssmlt));
             });
     }
 }

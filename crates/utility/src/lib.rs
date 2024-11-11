@@ -1,4 +1,7 @@
-use std::{ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign, Index}, cmp::Ordering};
+use std::{
+    cmp::Ordering,
+    ops::{Add, AddAssign, Div, DivAssign, Index, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
 pub fn sort_by_indices<T>(vec: &mut [T], mut indices: Vec<usize>) {
     for index in 0..vec.len() {
@@ -62,16 +65,16 @@ pub fn float_cmp(a: f32, b: f32) -> Ordering {
 #[derive(Copy, Clone, Debug, PartialEq, Default)]
 #[repr(C)]
 pub struct Vec3 {
-	pub x: f32,
-	pub y: f32,
-	pub z: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Default)]
 #[repr(C)]
 pub struct Vec2 {
-	pub x: f32,
-	pub y: f32,
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -92,11 +95,10 @@ impl Ray {
     }
 }
 
-
 macro_rules! expr {
-	($e:expr) => {
-		$e
-	};
+    ($e:expr) => {
+        $e
+    };
 }
 
 macro_rules! impl_operator {
@@ -197,232 +199,226 @@ macro_rules! impl_operator_float_assign {
     };
 }
 
-
 impl Vec3 {
-        pub const ZERO: Self = Self::zero();
-        pub const ONE: Self = Self::one();
-        pub const X: Self = Self::x();
-        pub const Y: Self = Self::y();
-        pub const Z: Self = Self::z();
+    pub const ZERO: Self = Self::zero();
+    pub const ONE: Self = Self::one();
+    pub const X: Self = Self::x();
+    pub const Y: Self = Self::y();
+    pub const Z: Self = Self::z();
 
-	#[inline]
-	pub const fn new(x: f32, y: f32, z: f32) -> Self {
-		Vec3 { x, y, z }
-	}
+    #[inline]
+    pub const fn new(x: f32, y: f32, z: f32) -> Self {
+        Vec3 { x, y, z }
+    }
 
-	#[inline]
-	pub const fn one() -> Self {
-		Vec3::new(1.0, 1.0, 1.0)
-	}
+    #[inline]
+    pub const fn one() -> Self {
+        Vec3::new(1.0, 1.0, 1.0)
+    }
 
-	#[inline]
-	pub const fn zero() -> Self {
-		Vec3::new(0.0, 0.0, 0.0)
-	}
+    #[inline]
+    pub const fn zero() -> Self {
+        Vec3::new(0.0, 0.0, 0.0)
+    }
 
-	#[inline]
-	pub const fn x() -> Self {
-		Vec3::new(1.0, 0.0, 0.0)
-	}
+    #[inline]
+    pub const fn x() -> Self {
+        Vec3::new(1.0, 0.0, 0.0)
+    }
 
-	#[inline]
-	pub const fn y() -> Self {
-		Vec3::new(0.0, 1.0, 0.0)
-	}
+    #[inline]
+    pub const fn y() -> Self {
+        Vec3::new(0.0, 1.0, 0.0)
+    }
 
-	#[inline]
-	pub const fn z() -> Self {
-		Vec3::new(0.0, 0.0, 1.0)
-	}
+    #[inline]
+    pub const fn z() -> Self {
+        Vec3::new(0.0, 0.0, 1.0)
+    }
 
-        #[inline]
-        pub fn zyx(&self) -> Self {
-            Self::new(self.z, self.y, self.x)
-        }
+    #[inline]
+    pub fn zyx(&self) -> Self {
+        Self::new(self.z, self.y, self.x)
+    }
 
-        #[inline]
-        pub fn xzy(&self) -> Self {
-            Self::new(self.x, self.z, self.y)
-        }
+    #[inline]
+    pub fn xzy(&self) -> Self {
+        Self::new(self.x, self.z, self.y)
+    }
 
-        #[inline]
-        pub fn yxz(&self) -> Self {
-            Self::new(self.y, self.x, self.z)
-        }
+    #[inline]
+    pub fn yxz(&self) -> Self {
+        Self::new(self.y, self.x, self.z)
+    }
 
-	#[inline]
-	pub fn from_spherical(
-		sin_theta: f32,
-		cos_theta: f32,
-		sin_phi: f32,
-		cos_phi: f32,
-	) -> Self {
-		Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta)
-	}
+    #[inline]
+    pub fn from_spherical(sin_theta: f32, cos_theta: f32, sin_phi: f32, cos_phi: f32) -> Self {
+        Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta)
+    }
 
-	#[inline]
-	pub fn dot(&self, other: Self) -> f32 {
-		self.x * other.x + self.y * other.y + self.z * other.z
-	}
+    #[inline]
+    pub fn dot(&self, other: Self) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
 
-	#[inline]
-	pub fn cross(&self, other: Self) -> Self {
-		Vec3::new(
-			self.y * other.z - self.z * other.y,
-			self.z * other.x - self.x * other.z,
-			self.x * other.y - self.y * other.x,
-		)
-	}
+    #[inline]
+    pub fn cross(&self, other: Self) -> Self {
+        Vec3::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
+    }
 
-	#[inline]
-	pub fn mag_sq(&self) -> f32 {
-		self.dot(*self)
-	}
+    #[inline]
+    pub fn mag_sq(&self) -> f32 {
+        self.dot(*self)
+    }
 
-	#[inline]
-	pub fn mag(&self) -> f32 {
-		self.dot(*self).sqrt()
-	}
+    #[inline]
+    pub fn mag(&self) -> f32 {
+        self.dot(*self).sqrt()
+    }
 
-	#[inline]
-	pub fn normalise(&mut self) {
-		*self /= self.mag();
-	}
+    #[inline]
+    pub fn normalise(&mut self) {
+        *self /= self.mag();
+    }
 
-	#[inline]
-	pub fn normalised(self) -> Self {
-		self / self.mag()
-	}
-	#[inline]
-	pub fn abs(self) -> Self {
-		Vec3::new(self.x.abs(), self.y.abs(), self.z.abs())
-	}
-	// note: self is pointing away from surface
-	#[inline]
-	pub fn reflect(&mut self, normal: Self) {
-		*self = self.reflected(normal)
-	}
+    #[inline]
+    pub fn normalised(self) -> Self {
+        self / self.mag()
+    }
+    #[inline]
+    pub fn abs(self) -> Self {
+        Vec3::new(self.x.abs(), self.y.abs(), self.z.abs())
+    }
+    // note: self is pointing away from surface
+    #[inline]
+    pub fn reflect(&mut self, normal: Self) {
+        *self = self.reflected(normal)
+    }
 
-	#[inline]
-	pub fn reflected(&self, normal: Self) -> Self {
-		2.0 * self.dot(normal) * normal - *self
-	}
+    #[inline]
+    pub fn reflected(&self, normal: Self) -> Self {
+        2.0 * self.dot(normal) * normal - *self
+    }
 
-	#[inline]
-	pub fn component_min(self) -> f32 {
-		self.x.min(self.y.min(self.z))
-	}
+    #[inline]
+    pub fn component_min(self) -> f32 {
+        self.x.min(self.y.min(self.z))
+    }
 
-	#[inline]
-	pub fn component_max(self) -> f32 {
-		self.x.max(self.y.max(self.z))
-	}
+    #[inline]
+    pub fn component_max(self) -> f32 {
+        self.x.max(self.y.max(self.z))
+    }
 
-	#[inline]
-	pub fn min_by_component(self, other: Self) -> Self {
-		Vec3::new(
-			self.x.min(other.x),
-			self.y.min(other.y),
-			self.z.min(other.z),
-		)
-	}
+    #[inline]
+    pub fn min_by_component(self, other: Self) -> Self {
+        Vec3::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
+    }
 
-	#[inline]
-	pub fn max_by_component(self, other: Self) -> Self {
-		Vec3::new(
-			self.x.max(other.x),
-			self.y.max(other.y),
-			self.z.max(other.z),
-		)
-	}
+    #[inline]
+    pub fn max_by_component(self, other: Self) -> Self {
+        Vec3::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
+    }
 
-	#[inline]
-	pub fn contains_nan(&self) -> bool {
-		self.x.is_nan() || self.y.is_nan() || self.z.is_nan()
-	}
-	#[inline]
-	pub fn is_finite(&self) -> bool {
-		self.x.is_finite() || self.y.is_finite() || self.z.is_finite()
-	}
+    #[inline]
+    pub fn contains_nan(&self) -> bool {
+        self.x.is_nan() || self.y.is_nan() || self.z.is_nan()
+    }
+    #[inline]
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() || self.y.is_finite() || self.z.is_finite()
+    }
 }
 
 impl Vec2 {
-	#[inline]
-	pub fn new(x: f32, y: f32) -> Self {
-		Vec2 { x, y }
-	}
+    #[inline]
+    pub fn new(x: f32, y: f32) -> Self {
+        Vec2 { x, y }
+    }
 
-	#[inline]
-	pub fn one() -> Self {
-		Vec2::new(1.0, 1.0)
-	}
+    #[inline]
+    pub fn one() -> Self {
+        Vec2::new(1.0, 1.0)
+    }
 
-	#[inline]
-	pub fn zero() -> Self {
-		Vec2::new(0.0, 0.0)
-	}
+    #[inline]
+    pub fn zero() -> Self {
+        Vec2::new(0.0, 0.0)
+    }
 
-	#[inline]
-	pub fn x() -> Self {
-		Vec2::new(1.0, 0.0)
-	}
+    #[inline]
+    pub fn x() -> Self {
+        Vec2::new(1.0, 0.0)
+    }
 
-	#[inline]
-	pub fn y() -> Self {
-		Vec2::new(0.0, 1.0)
-	}
+    #[inline]
+    pub fn y() -> Self {
+        Vec2::new(0.0, 1.0)
+    }
 
-	#[inline]
-	pub fn dot(&self, other: Self) -> f32 {
-		self.x * other.x + self.y * other.y
-	}
+    #[inline]
+    pub fn dot(&self, other: Self) -> f32 {
+        self.x * other.x + self.y * other.y
+    }
 
-	#[inline]
-	pub fn mag_sq(&self) -> f32 {
-		self.dot(*self)
-	}
-	#[inline]
-	pub fn mag(&self) -> f32 {
-		self.dot(*self).sqrt()
-	}
-	#[inline]
-	pub fn normalise(&mut self) {
-		*self /= self.mag();
-	}
+    #[inline]
+    pub fn mag_sq(&self) -> f32 {
+        self.dot(*self)
+    }
+    #[inline]
+    pub fn mag(&self) -> f32 {
+        self.dot(*self).sqrt()
+    }
+    #[inline]
+    pub fn normalise(&mut self) {
+        *self /= self.mag();
+    }
 
-	#[inline]
-	pub fn normalised(self) -> Self {
-		self / self.mag()
-	}
-	#[inline]
-	pub fn abs(self) -> Self {
-		Vec2::new(self.x.abs(), self.y.abs())
-	}
+    #[inline]
+    pub fn normalised(self) -> Self {
+        self / self.mag()
+    }
+    #[inline]
+    pub fn abs(self) -> Self {
+        Vec2::new(self.x.abs(), self.y.abs())
+    }
 
-	#[inline]
-	pub fn component_min(self) -> f32 {
-		self.x.min(self.y)
-	}
+    #[inline]
+    pub fn component_min(self) -> f32 {
+        self.x.min(self.y)
+    }
 
-	#[inline]
-	pub fn component_max(self) -> f32 {
-		self.x.max(self.y)
-	}
+    #[inline]
+    pub fn component_max(self) -> f32 {
+        self.x.max(self.y)
+    }
 
-	#[inline]
-	pub fn min_by_component(self, other: Self) -> Self {
-		Vec2::new(self.x.min(other.x), self.y.min(other.y))
-	}
+    #[inline]
+    pub fn min_by_component(self, other: Self) -> Self {
+        Vec2::new(self.x.min(other.x), self.y.min(other.y))
+    }
 
-	#[inline]
-	pub fn max_by_component(self, other: Self) -> Self {
-		Vec2::new(self.x.max(other.x), self.y.max(other.y))
-	}
+    #[inline]
+    pub fn max_by_component(self, other: Self) -> Self {
+        Vec2::new(self.x.max(other.x), self.y.max(other.y))
+    }
 
-	#[inline]
-	pub fn contains_nan(&self) -> bool {
-		self.x.is_nan() || self.y.is_nan()
-	}
+    #[inline]
+    pub fn contains_nan(&self) -> bool {
+        self.x.is_nan() || self.y.is_nan()
+    }
 }
 
 impl_operator!(Add, add, +);
@@ -446,40 +442,40 @@ impl_operator_float!(Div, div, /);
 impl_operator_float_assign!(DivAssign, div_assign, /=);
 
 impl Neg for Vec3 {
-	type Output = Self;
-	#[inline]
-	fn neg(self) -> Self {
-		Vec3::new(-self.x, -self.y, -self.z)
-	}
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        Vec3::new(-self.x, -self.y, -self.z)
+    }
 }
 
 impl std::fmt::Display for Vec3 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "({}, {}, {})", self.x, self.y, self.z)
-	}
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
 }
 
 impl From<[f32; 3]> for Vec3 {
-	fn from(vec: [f32; 3]) -> Self {
-		Vec3::new(vec[0], vec[1], vec[2])
-	}
+    fn from(vec: [f32; 3]) -> Self {
+        Vec3::new(vec[0], vec[1], vec[2])
+    }
 }
 
 impl From<[f32; 2]> for Vec2 {
-	fn from(vec: [f32; 2]) -> Self {
-		Vec2::new(vec[0], vec[1])
-	}
+    fn from(vec: [f32; 2]) -> Self {
+        Vec2::new(vec[0], vec[1])
+    }
 }
 
 impl Index<usize> for Vec3 {
-   type Output = f32;
+    type Output = f32;
 
-   fn index(&self, index: usize) -> &Self::Output {
-       match index {
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
             0 => &self.x,
             1 => &self.y,
             2 => &self.z,
-            _ => unreachable!()
-       }
-   }
+            _ => unreachable!(),
+        }
+    }
 }

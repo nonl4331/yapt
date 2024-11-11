@@ -7,7 +7,7 @@ pub struct Naive {}
 
 impl Naive {
     #[must_use]
-    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng) -> (Vec3, u64) {
+    pub fn rgb(mut ray: Ray, rng: &mut impl MinRng) -> (Vec3, u64) {
         let (mut tp, mut rgb) = (Vec3::ONE, Vec3::ZERO);
 
         let mut depth = 0;
@@ -15,7 +15,7 @@ impl Naive {
         while depth < MAX_DEPTH {
             depth += 1;
 
-            let sect = get_intersection(&ray, bvh);
+            let sect = get_intersection(&ray);
 
             if sect.is_none() {
                 rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
@@ -54,9 +54,9 @@ pub struct NEEMIS {}
 
 impl NEEMIS {
     #[must_use]
-    pub fn rgb(mut ray: Ray, bvh: &Bvh, rng: &mut impl MinRng, samplable: &[usize]) -> (Vec3, u64) {
+    pub fn rgb(mut ray: Ray, rng: &mut impl MinRng, samplable: &[usize]) -> (Vec3, u64) {
         if samplable.is_empty() {
-            return Naive::rgb(ray, bvh, rng);
+            return Naive::rgb(ray, rng);
         }
         let inverse_samplable = 1.0 / samplable.len() as f32;
 
@@ -67,7 +67,7 @@ impl NEEMIS {
         // ----
         // find first intersection (MIS + NEE doesn't apply to camera rays)
         // ----
-        let mut sect = get_intersection(&ray, bvh);
+        let mut sect = get_intersection(&ray);
 
         if sect.is_none() {
             unsafe {
@@ -99,7 +99,7 @@ impl NEEMIS {
 
             // check for obstructions
             ray_count += 1;
-            let light_sect = intersect_idx(&light_ray, bvh, light_idx);
+            let light_sect = intersect_idx(&light_ray, light_idx);
             if !light_sect.is_none() && !mat.is_delta() {
                 let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 
@@ -124,7 +124,7 @@ impl NEEMIS {
             tp *= mat.eval(&sect, wo, ray.dir);
 
             ray_count += 1;
-            let new_sect = get_intersection(&ray, bvh);
+            let new_sect = get_intersection(&ray);
             if new_sect.is_none() {
                 rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
                 break;
@@ -173,9 +173,9 @@ impl NEEMIS {
     }
 }
 #[must_use]
-fn get_intersection(ray: &Ray, bvh: &Bvh) -> Intersection {
+fn get_intersection(ray: &Ray) -> Intersection {
     let mut sect = Intersection::NONE;
-    for range in bvh.traverse(ray) {
+    for range in unsafe { BVH.traverse(ray) } {
         for i in range {
             let mut tri_sect = unsafe { TRIANGLES[i].intersect(ray) };
             tri_sect.id = i;
@@ -185,13 +185,13 @@ fn get_intersection(ray: &Ray, bvh: &Bvh) -> Intersection {
     sect
 }
 #[must_use]
-pub fn intersect_idx(ray: &Ray, bvh: &Bvh, idx: usize) -> Intersection {
+pub fn intersect_idx(ray: &Ray, idx: usize) -> Intersection {
     let sect = unsafe { TRIANGLES[idx].intersect(ray) };
     if sect.is_none() {
         return sect;
     }
 
-    for range in bvh.traverse(ray) {
+    for range in unsafe { BVH.traverse(ray) } {
         for i in range {
             if i == idx {
                 continue;

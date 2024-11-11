@@ -1,7 +1,8 @@
 use crate::prelude::*;
 
-#[derive(clap::ValueEnum, Copy, Clone)]
+#[derive(clap::ValueEnum, Copy, Clone, Default)]
 pub enum Scene {
+    #[default]
     One,
     Car,
     Sphere,

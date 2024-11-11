@@ -1,3 +1,5 @@
+#![feature(get_mut_unchecked)]
+#[allow(static_mut_refs)]
 pub const WIDTH: u32 = 1024;
 pub const HEIGHT: u32 = 1024;
 const SAMPLES: u64 = 10000;
@@ -19,8 +21,9 @@ pub mod work_handler;
 pub mod prelude {
     pub use crate::{
         camera::Cam, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng, scene::Scene,
-        triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings, Splat,
-        ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings, Splat, BVH,
+        CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES,
+        WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -51,15 +54,17 @@ pub static mut SAMPLABLE: Vec<usize> = vec![];
 pub static mut BVH: Bvh = Bvh { nodes: vec![] };
 pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(HashMap::new);
 pub static mut ENVMAP: EnvMap = EnvMap::DEFAULT;
+pub static mut CAM: Cam = crate::camera::PLACEHOLDER;
 
 const MAGIC_VALUE_ONE: f32 = 543543521.0;
 const MAGIC_VALUE_ONE_VEC: Vec3 = Vec3::new(MAGIC_VALUE_ONE, MAGIC_VALUE_ONE, MAGIC_VALUE_ONE);
 const MAGIC_VALUE_TWO: f32 = 5435421.5;
 const MAGIC_VALUE_TWO_VEC: Vec3 = Vec3::new(MAGIC_VALUE_TWO, MAGIC_VALUE_TWO, MAGIC_VALUE_TWO);
 
-#[derive(clap::ValueEnum, Copy, Clone)]
+#[derive(clap::ValueEnum, Copy, Clone, Default)]
 pub enum IntegratorType {
     Naive,
+    #[default]
     NEE,
 }
 
@@ -157,9 +162,9 @@ pub struct RenderSettings {
     pub samples: u64,
     #[arg(short='o', long, default_value_t = String::from(crate::FILENAME))]
     pub filename: String,
-    #[arg(short, long, default_value_t = IntegratorType::NEE)]
+    #[arg(short, long, default_value_t = IntegratorType::default())]
     pub integrator: IntegratorType,
-    #[arg(short, long, default_value_t = Scene::One)]
+    #[arg(short, long, default_value_t = Scene::default())]
     pub scene: Scene,
     #[arg(short, default_value_t = false)]
     pub pssmlt: bool,
@@ -173,6 +178,26 @@ pub struct RenderSettings {
     pub v_low: f32,
     #[arg(long, default_value_t = 1.0)]
     pub v_high: f32,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self {
+            bvh_heatmap: false,
+            width: crate::WIDTH,
+            height: crate::HEIGHT,
+            samples: crate::SAMPLES,
+            filename: String::from(crate::FILENAME),
+            integrator: IntegratorType::default(),
+            scene: Scene::default(),
+            pssmlt: false,
+            environment_map: None,
+            u_low: 0.0,
+            u_high: 1.0,
+            v_low: 0.0,
+            v_high: 1.0,
+        }
+    }
 }
 
 pub struct App {
@@ -191,6 +216,7 @@ pub struct App {
     pub work_start: std::time::Instant,
     pub last_update: std::time::Instant,
     pub updated: bool,
+    pub workload_id: u8,
     // gui state
     pub display_settings: bool,
 }
@@ -212,11 +238,21 @@ impl App {
             splats_done: 0,
             work_start: std::time::Instant::now(),
             last_update: std::time::Instant::now(),
+            workload_id: 0,
             work_rays: 0,
             updated: false,
             display_settings: false,
         };
         a.init();
+        if a.render_settings.samples != 0 {
+            a.work_req
+                .send(ComputeChange::WorkSamples(
+                    a.render_settings.samples,
+                    a.workload_id,
+                ))
+                .unwrap();
+            a.work_start = std::time::Instant::now();
+        }
         a
     }
     fn init(&mut self) {
@@ -237,15 +273,11 @@ impl App {
             }
         }
 
-        let cam = unsafe { crate::scene::setup_scene(&rs) };
-
-        let bvh = unsafe { Bvh::new(&mut *addr_of_mut!(TRIANGLES)) };
         unsafe {
-            BVH = bvh;
-        }
+            CAM = crate::scene::setup_scene(&rs);
+            BVH = Bvh::new(&mut *addr_of_mut!(TRIANGLES));
 
-        // calculate samplable objects after BVH rearranges TRIANGLES
-        unsafe {
+            // calculate samplable objects after BVH rearranges TRIANGLES
             for (i, tri) in TRIANGLES.iter().enumerate() {
                 if let Mat::Light(_) = MATERIALS[tri.mat] {
                     SAMPLABLE.push(i);
@@ -254,7 +286,6 @@ impl App {
         }
 
         let state = State::new(
-            cam,
             rs.width as usize,
             rs.height as usize,
             self.context.clone(),
@@ -265,6 +296,30 @@ impl App {
         self.work_req
             .send(ComputeChange::UpdateState(state))
             .unwrap();
+    }
+    // reset canvas and state and prepare for a new workload
+    pub fn next_workload(&mut self) {
+        let state = State::new(
+            self.render_settings.width as usize,
+            self.render_settings.height as usize,
+            self.context.clone(),
+            self.render_settings.integrator,
+            0,
+        );
+        self.work_req
+            .send(ComputeChange::UpdateState(state))
+            .unwrap();
+        self.workload_id = self.workload_id.wrapping_add(1);
+        self.canvas = vec![
+            Vec3::ZERO;
+            self.render_settings.width as usize
+                * self.render_settings.height as usize
+        ];
+        self.work_rays = 0;
+        self.splats_done = 0;
+        self.updated = true;
+        self.last_update = std::time::Instant::now();
+        self.work_start = std::time::Instant::now();
     }
 }
 

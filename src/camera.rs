@@ -1,5 +1,31 @@
 use crate::prelude::*;
 
+pub const PLACEHOLDER: Cam = Cam {
+    lower_left: Vec3 {
+        x: -0.5773503,
+        y: 1.0,
+        z: -0.5773503,
+    },
+    up: Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 1.1547006,
+    },
+    right: Vec3 {
+        x: 1.1547006,
+        y: 0.0,
+        z: 0.0,
+    },
+    origin: Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    },
+    width: 1024,
+    height: 1024,
+};
+
+#[derive(Debug)]
 pub struct Cam {
     pub lower_left: Vec3,
     pub up: Vec3,
