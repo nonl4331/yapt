@@ -213,6 +213,7 @@ pub struct App {
     pub splats_done: u64,
     pub work_rays: u64,
     // work statistics
+    pub work_duration: std::time::Duration,
     pub work_start: std::time::Instant,
     pub last_update: std::time::Instant,
     pub updated: bool,
@@ -236,6 +237,7 @@ impl App {
             work_req,
             canvas: Vec::new(),
             splats_done: 0,
+            work_duration: std::time::Duration::ZERO,
             work_start: std::time::Instant::now(),
             last_update: std::time::Instant::now(),
             workload_id: 0,

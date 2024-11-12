@@ -15,14 +15,16 @@ impl eframe::App for App {
                 Update::Calculation(splats, workload_id, ray_count)
                     if workload_id == self.workload_id =>
                 {
+                    self.work_duration += self.work_start.elapsed();
+                    self.work_start = std::time::Instant::now();
                     self.splats_done += splats.len() as u64;
                     if self.splats_done == rs.width as u64 * rs.height as u64 * rs.samples {
                         println!(
                             "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
-                            (self.work_rays as f64 / self.work_start.elapsed().as_secs_f64())
+                            (self.work_rays as f64 / self.work_duration.as_secs_f64())
                                 / 1000000 as f64,
                             self.work_rays,
-                            self.work_start.elapsed().as_secs_f64()
+                            self.work_duration.as_secs_f64(),
                         );
                     }
                     // add splats to image
@@ -126,9 +128,9 @@ impl eframe::App for App {
                     if rs.samples == 0 {
                         self.work_start = std::time::Instant::now();
                     }
-                    rs.samples += 1000;
+                    rs.samples += 5;
                     self.work_req
-                        .send(ComputeChange::WorkSamples(1000, self.workload_id))
+                        .send(ComputeChange::WorkSamples(5, self.workload_id))
                         .unwrap();
                 }
                 if ui.button("Show render settings").clicked() {
@@ -136,10 +138,9 @@ impl eframe::App for App {
                 }
                 ui.label(format!(
                     "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
-                    (self.work_rays as f64 / self.work_start.elapsed().as_secs_f64())
-                        / 1000000 as f64,
+                    (self.work_rays as f64 / self.work_duration.as_secs_f64()) / 1000000 as f64,
                     self.work_rays,
-                    self.work_start.elapsed().as_secs_f64()
+                    self.work_duration.as_secs_f64(),
                 ));
             });
         });
