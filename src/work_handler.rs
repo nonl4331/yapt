@@ -1,8 +1,12 @@
 use rand_pcg::Pcg64Mcg;
 
-use std::sync::{
-    mpsc::{channel, Receiver, Sender},
-    Arc,
+use std::{
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc::{channel, Receiver, Sender},
+        Arc,
+    },
 };
 
 use crate::{IntegratorType, Naive, Splat, NEEMIS};
@@ -55,11 +59,60 @@ impl State {
     }
 }
 
+#[derive(Clone)]
 pub enum Work {
     Pixels(std::ops::Range<u64>),
     Mutations(u64),
 }
 
+struct WorkQueue {
+    queue: VecDeque<(Work, Arc<State>, u64, u8)>,
+    read: AtomicUsize,
+}
+
+impl Default for WorkQueue {
+    fn default() -> Self {
+        Self {
+            queue: VecDeque::default(),
+            read: AtomicUsize::new(usize::MAX),
+        }
+    }
+}
+
+impl WorkQueue {
+    pub unsafe fn add_work(
+        queue: &mut Arc<Self>,
+        mut new_work: VecDeque<(Work, Arc<State>, u64, u8)>,
+    ) {
+        let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
+        let old_index = s.read.swap(usize::MAX, Ordering::SeqCst);
+        s.queue.append(&mut new_work);
+
+        // trim old data
+        if old_index < s.queue.len() {
+            s.queue = s.queue.split_off(old_index);
+        }
+        if !s.queue.is_empty() {
+            s.read.store(0, Ordering::SeqCst);
+        }
+    }
+    pub unsafe fn clear(queue: &mut Arc<Self>) {
+        let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
+        s.read.store(usize::MAX, Ordering::SeqCst);
+        s.queue.clear();
+    }
+    pub fn get_work(queue: &Arc<Self>) -> Option<(Work, Arc<State>, u64, u8)> {
+        let current_index = queue.read.swap(usize::MAX, Ordering::SeqCst);
+        if current_index == usize::MAX {
+            return None;
+        }
+        let val = Some(queue.queue[current_index].clone());
+        if current_index + 1 != queue.queue.len() {
+            queue.read.store(current_index + 1, Ordering::SeqCst);
+        }
+        val
+    }
+}
 // ------------------------------
 // Creating the work handler
 // ------------------------------
@@ -70,7 +123,7 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
     std::thread::spawn(move || {
         let mut state: Option<Arc<State>> = None;
 
-        let work_queue = crossbeam_deque::Worker::<(Work, Arc<State>, u64, u8)>::new_fifo();
+        let mut work_queue = Arc::new(WorkQueue::default());
         // for seeding RNG, changes with each work batch
         let mut work_id = 0;
 
@@ -78,15 +131,18 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
         // Spawn compute threads
         // ------------------------------
         let num_threads = num_cpus::get();
+        log::trace!("Spawned {num_threads} compute threads.");
         for i in 0..num_threads {
-            spawn_compute_thread(i as u64, work_queue.stealer(), update_sender.clone());
+            spawn_compute_thread(i as u64, work_queue.clone(), update_sender.clone());
         }
         // ------------------------------
         // Change Handling loop
         // ------------------------------
         while let Ok(change) = compute_thread_request_handler.recv() {
             match change {
-                ComputeChange::Shutdown => while let Some(_) = work_queue.pop() {},
+                ComputeChange::Shutdown => {
+                    unsafe { WorkQueue::clear(&mut work_queue) };
+                }
                 ComputeChange::WorkSamples(samples, workload_id) => {
                     // notify GUI that required state was not provided
                     let Some(ref state) = state else {
@@ -99,9 +155,10 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
 
                     let mut pixels_start = 0;
                     let end = samples * state.width as u64 * state.height as u64;
+                    let mut deque = VecDeque::new();
                     while pixels_start < end {
                         let pixels_end = (pixels_start + workgroup_size).min(end);
-                        work_queue.push((
+                        deque.push_back((
                             Work::Pixels(pixels_start..pixels_end),
                             state.clone(),
                             work_id,
@@ -111,11 +168,13 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
                         pixels_start = pixels_end;
                         work_id += 1;
                     }
+                    unsafe { WorkQueue::add_work(&mut work_queue, deque) };
                 }
                 ComputeChange::WorkMutations(_) => todo!(),
                 ComputeChange::UpdateState(new_state) => {
                     // clear out work queue before modifying state
-                    while let Some(_) = work_queue.pop() {}
+                    //while let Some(_) = work_queue.pop() {}
+                    unsafe { WorkQueue::clear(&mut work_queue) };
                     match state.as_mut() {
                         None => state = Some(Arc::new(new_state)),
                         Some(ref mut old_state) => {
@@ -138,7 +197,7 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
 // ------------------------------
 fn spawn_compute_thread(
     thread_id: u64,
-    work_stealer: crossbeam_deque::Stealer<(Work, Arc<State>, u64, u8)>,
+    work_stealer: Arc<WorkQueue>,
     update_sender: Sender<Update>,
 ) {
     std::thread::spawn(move || {
@@ -146,13 +205,8 @@ fn spawn_compute_thread(
             // ------------------------------
             // Get new work or park
             // ------------------------------
-            let (work, state, work_id, workload_id) = match work_stealer.steal() {
-                crossbeam_deque::Steal::Empty => {
-                    std::thread::park_timeout(PARK_TIME);
-                    continue;
-                }
-                crossbeam_deque::Steal::Retry => continue,
-                crossbeam_deque::Steal::Success(work) => {
+            let (work, state, work_id, workload_id) = match WorkQueue::get_work(&work_stealer) {
+                Some(work) => {
                     log::trace!(
                         "Thread {thread_id} got work {} as part of workload {}.",
                         work.2,
@@ -160,6 +214,7 @@ fn spawn_compute_thread(
                     );
                     work
                 }
+                None => continue,
             };
 
             let rng = Pcg64Mcg::new((state.base_rng_seed + work_id) as u128);
@@ -186,7 +241,6 @@ fn work_pixels(
 ) -> Update {
     let mut rays = 0;
     let mut splats = Vec::with_capacity((pixels.end - pixels.start) as usize);
-    //let pn = pixels.end - pixels.start;
 
     let frame_pixels = (state.width * state.height) as u64;
     for pixel_i in pixels {
@@ -204,26 +258,6 @@ fn work_pixels(
     Update::Calculation(splats, workload_id, rays)
 }
 
-fn work_mutations(mutations: u64, mut rng: Pcg64Mcg, state: &State, thread_id: u64) -> Update {
-    /*let mut rays = 0;
-    let mut splats = Vec::with_capacity(2 * mutations as usize);
-
-
-    let mut rng = crate::pssmlt::PssState::new(rng);
-
-    for _ in 0..mutations {
-
-            let (uv, ray) = state.cam.get_random_ray(&mut rng);
-            let (col_cir, ray_count) = match state.integrator {
-                IntegratorType::Naive => Naive::rgb(ray, &state.bvh, &mut rng),
-                IntegratorType::NEE => NEEMIS::rgb(ray, &state.bvh, &mut rng, unsafe {
-                    &*std::ptr::addr_of!(crate::SAMPLABLE)
-                }),
-
-            };
-            rays += ray_count;
-
-    }*/
-
+fn work_mutations(_mutations: u64, _rng: Pcg64Mcg, _state: &State, _workload_id: u64) -> Update {
     todo!()
 }

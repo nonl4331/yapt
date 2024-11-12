@@ -91,10 +91,10 @@ impl eframe::App for App {
         }
         let old_samples = rs.samples;
         if ctx.input(|i| i.key_released(egui::Key::W)) {
-            unsafe {
+            /*unsafe {
                 CAM.origin += Vec3::Y * 0.01;
                 CAM.lower_left += Vec3::Y * 0.01;
-            }
+            }*/
             self.next_workload();
             self.work_start = std::time::Instant::now();
             self.render_settings.samples = old_samples;
