@@ -61,13 +61,13 @@ impl State {
 }
 
 #[derive(Clone)]
-pub enum Work {
+pub enum WorkLoad {
     Pixels(std::ops::Range<u64>),
     Mutations(u64),
 }
 
 struct WorkQueue {
-    queue: VecDeque<(Work, Arc<State>, u64, u8)>,
+    queue: VecDeque<(WorkLoad, Arc<State>, u64, u8)>,
     read: AtomicUsize,
 }
 
@@ -81,7 +81,7 @@ impl Default for WorkQueue {
 }
 
 enum FetchState {
-    Work(Work, Arc<State>, u64, u8),
+    Work(WorkLoad, Arc<State>, u64, u8),
     Busy,
     Empty,
 }
@@ -91,7 +91,7 @@ impl WorkQueue {
     const QUEUE_BUSY: usize = usize::MAX - 1;
     pub unsafe fn add_work(
         queue: &mut Arc<Self>,
-        mut new_work: VecDeque<(Work, Arc<State>, u64, u8)>,
+        mut new_work: VecDeque<(WorkLoad, Arc<State>, u64, u8)>,
     ) {
         let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
         let old_index = s.read.swap(Self::QUEUE_BUSY, Ordering::SeqCst);
@@ -179,7 +179,7 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
                     while pixels_start < end {
                         let pixels_end = (pixels_start + workgroup_size).min(end);
                         deque.push_back((
-                            Work::Pixels(pixels_start..pixels_end),
+                            WorkLoad::Pixels(pixels_start..pixels_end),
                             state.clone(),
                             work_id,
                             workload_id,
@@ -241,8 +241,8 @@ fn spawn_compute_thread(
             let rng = Pcg64Mcg::new((state.base_rng_seed + work_id) as u128);
 
             let work_result = match work {
-                Work::Pixels(pixels) => work_pixels(pixels, rng, state.as_ref(), workload_id),
-                Work::Mutations(_) => todo!(),
+                WorkLoad::Pixels(pixels) => work_pixels(pixels, rng, state.as_ref(), workload_id),
+                WorkLoad::Mutations(_) => todo!(),
             };
 
             log::trace!(
