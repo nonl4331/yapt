@@ -7,6 +7,7 @@ use std::{
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
+    usize,
 };
 
 use crate::{IntegratorType, Naive, Splat, NEEMIS};
@@ -79,38 +80,57 @@ impl Default for WorkQueue {
     }
 }
 
+enum FetchState {
+    Work(Work, Arc<State>, u64, u8),
+    Busy,
+    Empty,
+}
+
 impl WorkQueue {
+    const QUEUE_EMPTY: usize = usize::MAX;
+    const QUEUE_BUSY: usize = usize::MAX - 1;
     pub unsafe fn add_work(
         queue: &mut Arc<Self>,
         mut new_work: VecDeque<(Work, Arc<State>, u64, u8)>,
     ) {
         let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
-        let old_index = s.read.swap(usize::MAX, Ordering::SeqCst);
+        let old_index = s.read.swap(Self::QUEUE_BUSY, Ordering::SeqCst);
         s.queue.append(&mut new_work);
 
         // trim old data
         if old_index < s.queue.len() {
             s.queue = s.queue.split_off(old_index);
         }
-        if !s.queue.is_empty() {
+        if s.queue.is_empty() {
+            s.read.store(Self::QUEUE_EMPTY, Ordering::SeqCst);
+        } else {
             s.read.store(0, Ordering::SeqCst);
         }
     }
     pub unsafe fn clear(queue: &mut Arc<Self>) {
         let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
-        s.read.store(usize::MAX, Ordering::SeqCst);
+        s.read.store(Self::QUEUE_EMPTY, Ordering::SeqCst);
         s.queue.clear();
     }
-    pub fn get_work(queue: &Arc<Self>) -> Option<(Work, Arc<State>, u64, u8)> {
-        let current_index = queue.read.swap(usize::MAX, Ordering::SeqCst);
-        if current_index == usize::MAX {
-            return None;
+    pub fn get_work(queue: &Arc<Self>) -> FetchState {
+        // note this will either:
+        // leave both Self::QUEUE_EMPTY & Self::QUEUE_BUSY unmodified
+        // OR
+        // set the current index to Self::QUEUE_BUSY
+        let current_index = queue.read.fetch_max(Self::QUEUE_BUSY, Ordering::SeqCst);
+
+        if current_index == Self::QUEUE_BUSY {
+            return FetchState::Busy;
+        } else if current_index == Self::QUEUE_EMPTY {
+            return FetchState::Empty;
         }
-        let val = Some(queue.queue[current_index].clone());
+        let val = queue.queue[current_index].clone();
         if current_index + 1 != queue.queue.len() {
             queue.read.store(current_index + 1, Ordering::SeqCst);
+        } else {
+            queue.read.store(Self::QUEUE_EMPTY, Ordering::SeqCst);
         }
-        val
+        FetchState::Work(val.0, val.1, val.2, val.3)
     }
 }
 // ------------------------------
@@ -173,7 +193,6 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
                 ComputeChange::WorkMutations(_) => todo!(),
                 ComputeChange::UpdateState(new_state) => {
                     // clear out work queue before modifying state
-                    //while let Some(_) = work_queue.pop() {}
                     unsafe { WorkQueue::clear(&mut work_queue) };
                     match state.as_mut() {
                         None => state = Some(Arc::new(new_state)),
@@ -206,15 +225,17 @@ fn spawn_compute_thread(
             // Get new work or park
             // ------------------------------
             let (work, state, work_id, workload_id) = match WorkQueue::get_work(&work_stealer) {
-                Some(work) => {
+                FetchState::Work(work, state, work_id, workload_id) => {
                     log::trace!(
-                        "Thread {thread_id} got work {} as part of workload {}.",
-                        work.2,
-                        work.3
+                        "Thread {thread_id} got work {work_id} as part of workload {workload_id}.",
                     );
-                    work
+                    (work, state, work_id, workload_id)
                 }
-                None => continue,
+                FetchState::Empty => {
+                    std::thread::sleep(PARK_TIME);
+                    continue;
+                }
+                FetchState::Busy => continue,
             };
 
             let rng = Pcg64Mcg::new((state.base_rng_seed + work_id) as u128);
