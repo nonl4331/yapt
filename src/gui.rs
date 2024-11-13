@@ -93,11 +93,10 @@ impl eframe::App for App {
             self.last_update = std::time::Instant::now();
         }
         let old_samples = rs.samples;
+        let cam = unsafe { CAM.get().as_mut_unchecked() };
         if ctx.input(|i| i.key_released(egui::Key::W)) {
-            unsafe {
-                CAM.origin += Vec3::Y * 0.01;
-                CAM.lower_left += Vec3::Y * 0.01;
-            }
+            cam.origin += Vec3::Y * 0.01;
+            cam.lower_left += Vec3::Y * 0.01;
             self.next_workload();
             self.work_start = std::time::Instant::now();
             self.work_duration = std::time::Duration::ZERO;
@@ -106,10 +105,8 @@ impl eframe::App for App {
                 .send(ComputeChange::WorkSamples(old_samples, self.workload_id))
                 .unwrap();
         } else if ctx.input(|i| i.key_released(egui::Key::S)) {
-            unsafe {
-                CAM.origin -= Vec3::Y * 0.01;
-                CAM.lower_left -= Vec3::Y * 0.01;
-            }
+            cam.origin -= Vec3::Y * 0.01;
+            cam.lower_left -= Vec3::Y * 0.01;
             self.next_workload();
             self.work_start = std::time::Instant::now();
             self.work_duration = std::time::Duration::ZERO;

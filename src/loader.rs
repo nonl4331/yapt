@@ -3,16 +3,21 @@ use std::collections::HashMap;
 use crate::prelude::*;
 
 pub unsafe fn add_material<T: Into<String>>(name: T, material: Mat) {
-    let index = MATERIALS.len();
-    MATERIALS.push(material);
-    MATERIAL_NAMES.insert(name.into(), index);
+    let mut lock = MATERIAL_NAMES.lock().unwrap();
+    let mat_names = lock.get_mut_or_init(HashMap::new);
+    let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
+    let index = mats.len();
+    mats.push(material);
+    mat_names.insert(name.into(), index);
 }
 
 pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, String> {
+    let mut lock = MATERIAL_NAMES.lock().unwrap();
+    let mat_names = lock.get_mut_or_init(HashMap::new);
     let mut hashmap = HashMap::new();
     for (key, value) in map {
         let (key, value) = (key.into(), value.into());
-        if !unsafe { MATERIAL_NAMES.contains_key(&value) } {
+        if !mat_names.contains_key(&value) {
             log::error!("material {value} does not exist!");
             std::process::exit(0);
         }
@@ -22,7 +27,13 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
 }
 
 pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap<String, String>) {
-    let (models, mats) = tobj::load_obj(
+    let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
+    let tris = unsafe { TRIANGLES.get().as_mut_unchecked() };
+    let verts = unsafe { VERTICES.get().as_mut_unchecked() };
+    let norms = unsafe { NORMALS.get().as_mut_unchecked() };
+    let mut lock = MATERIAL_NAMES.lock().unwrap();
+    let mat_names = lock.get_mut_or_init(HashMap::new);
+    let (models, model_mats) = tobj::load_obj(
         path,
         &tobj::LoadOptions {
             triangulate: true,
@@ -37,7 +48,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
 
     for m in &models {
         // fallback to primitive name if materials don't exist
-        let mat_name = match mats {
+        let mat_name = match model_mats {
             Ok(ref mats) => m
                 .mesh
                 .material_id
@@ -46,26 +57,26 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
         };
 
         let mat_idx = match mat_name {
-            Some(ref name) => model_map.get(name).map_or(0, |mat_name| {
-                MATERIAL_NAMES.get(mat_name).copied().unwrap_or(0)
-            }),
+            Some(ref name) => model_map
+                .get(name)
+                .map_or(0, |mat_name| mat_names.get(mat_name).copied().unwrap_or(0)),
             None => 0,
         };
 
-        if mat_idx >= MATERIALS.len() {
+        if mat_idx >= mats.len() {
             log::error!("material index {mat_idx} does not exist!");
             std::process::exit(0);
         }
 
         let mesh = &m.mesh;
 
-        let vo = VERTICES.len();
-        let no = NORMALS.len();
+        let vo = verts.len();
+        let no = norms.len();
 
         // load vertices
         for j in 0..mesh.positions.len() / 3 {
             let i = j * 3;
-            VERTICES.push(
+            verts.push(
                 Vec3::new(
                     mesh.positions[i] * scale,
                     mesh.positions[i + 1] * scale,
@@ -77,7 +88,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
         // load normals
         for j in 0..mesh.normals.len() / 3 {
             let i = j * 3;
-            NORMALS.push(Vec3::new(
+            norms.push(Vec3::new(
                 mesh.normals[i],
                 mesh.normals[i + 1],
                 mesh.normals[i + 2],
@@ -92,7 +103,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
 
         for j in 0..ilen / 3 {
             let i = j * 3;
-            TRIANGLES.push(Tri::new(
+            tris.push(Tri::new(
                 [
                     mesh.indices[i] as usize + vo,
                     mesh.indices[i + 1] as usize + vo,

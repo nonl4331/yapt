@@ -8,6 +8,8 @@ pub struct Naive {}
 impl Naive {
     #[must_use]
     pub fn rgb(mut ray: Ray, rng: &mut impl MinRng) -> (Vec3, u64) {
+        let mats = unsafe { MATERIALS.get().as_ref_unchecked() };
+        let envmap = unsafe { ENVMAP.get().as_ref_unchecked() };
         let (mut tp, mut rgb) = (Vec3::ONE, Vec3::ZERO);
 
         let mut depth = 0;
@@ -18,11 +20,11 @@ impl Naive {
             let sect = get_intersection(&ray);
 
             if sect.is_none() {
-                rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
+                rgb += tp * envmap.sample_dir(ray.dir);
                 break;
             }
 
-            let mat = unsafe { &MATERIALS[sect.mat] };
+            let mat = &mats[sect.mat];
 
             let wo = ray.dir;
 
@@ -55,6 +57,11 @@ pub struct NEEMIS {}
 impl NEEMIS {
     #[must_use]
     pub fn rgb(mut ray: Ray, rng: &mut impl MinRng, samplable: &[usize]) -> (Vec3, u64) {
+        let mats = unsafe { MATERIALS.get().as_ref_unchecked() };
+        let envmap = unsafe { ENVMAP.get().as_ref_unchecked() };
+        let tris = unsafe { TRIANGLES.get().as_ref_unchecked() };
+        let samplables = unsafe { SAMPLABLE.get().as_ref_unchecked() };
+
         if samplable.is_empty() {
             return Naive::rgb(ray, rng);
         }
@@ -70,12 +77,10 @@ impl NEEMIS {
         let mut sect = get_intersection(&ray);
 
         if sect.is_none() {
-            unsafe {
-                return (ENVMAP.sample_dir(ray.dir), ray_count);
-            }
+            return (envmap.sample_dir(ray.dir), ray_count);
         }
 
-        let mut mat = unsafe { &MATERIALS[sect.mat] };
+        let mut mat = &mats[sect.mat];
 
         let mut rgb = mat.le(sect.pos, ray.dir);
 
@@ -91,8 +96,8 @@ impl NEEMIS {
             // ----
             // pick light
             let light_idx = rng.gen_range(0.0..(samplable.len() as f32)) as usize;
-            let light_idx = unsafe { SAMPLABLE[light_idx] };
-            let light = unsafe { &TRIANGLES[light_idx] };
+            let light_idx = samplables[light_idx];
+            let light = &tris[light_idx];
 
             // sample ray
             let (light_ray, light_le) = light.sample_ray(&sect, rng);
@@ -126,17 +131,16 @@ impl NEEMIS {
             ray_count += 1;
             let new_sect = get_intersection(&ray);
             if new_sect.is_none() {
-                rgb += unsafe { tp * ENVMAP.sample_dir(ray.dir) };
+                rgb += tp * envmap.sample_dir(ray.dir);
                 break;
             }
 
-            let new_mat = unsafe { &MATERIALS[new_sect.mat] };
+            let new_mat = &mats[new_sect.mat];
 
             // hit samplable calculate weight
             if samplable.contains(&new_sect.id) && !mat.is_delta() {
                 let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
-                let bsdf_light_pdf =
-                    unsafe { TRIANGLES[new_sect.id].pdf(&new_sect, &ray) } * inverse_samplable;
+                let bsdf_light_pdf = tris[new_sect.id].pdf(&new_sect, &ray) * inverse_samplable;
                 rgb += tp
                     * power_heuristic(bsdf_pdf, bsdf_light_pdf)
                     * new_mat.le(new_sect.pos, ray.dir);
@@ -174,10 +178,12 @@ impl NEEMIS {
 }
 #[must_use]
 fn get_intersection(ray: &Ray) -> Intersection {
+    let tris = unsafe { TRIANGLES.get().as_ref_unchecked() };
+    let bvh = unsafe { BVH.get().as_ref_unchecked() };
     let mut sect = Intersection::NONE;
-    for range in unsafe { BVH.traverse(ray) } {
+    for range in bvh.traverse(ray) {
         for i in range {
-            let mut tri_sect = unsafe { TRIANGLES[i].intersect(ray) };
+            let mut tri_sect = tris[i].intersect(ray);
             tri_sect.id = i;
             sect.min(tri_sect);
         }
@@ -186,17 +192,19 @@ fn get_intersection(ray: &Ray) -> Intersection {
 }
 #[must_use]
 pub fn intersect_idx(ray: &Ray, idx: usize) -> Intersection {
-    let sect = unsafe { TRIANGLES[idx].intersect(ray) };
+    let tris = unsafe { TRIANGLES.get().as_ref_unchecked() };
+    let bvh = unsafe { BVH.get().as_ref_unchecked() };
+    let sect = tris[idx].intersect(ray);
     if sect.is_none() {
         return sect;
     }
 
-    for range in unsafe { BVH.traverse(ray) } {
+    for range in bvh.traverse(ray) {
         for i in range {
             if i == idx {
                 continue;
             }
-            let t = unsafe { TRIANGLES[i].intersect(ray).t };
+            let t = tris[i].intersect(ray).t;
             if t > 0.0 && t < sect.t {
                 return Intersection::NONE;
             }

@@ -10,7 +10,7 @@ use std::{
     usize,
 };
 
-use crate::{IntegratorType, Naive, Splat, NEEMIS};
+use crate::{IntegratorType, Naive, Splat, NEEMIS, SAMPLABLE};
 
 const MIN_WORKGROUP_SIZE: u64 = 4096;
 const PARK_TIME: std::time::Duration = std::time::Duration::from_millis(20);
@@ -268,12 +268,13 @@ fn work_pixels(
     let frame_pixels = (state.width * state.height) as u64;
     for pixel_i in pixels {
         let pixel_i = pixel_i % frame_pixels;
-        let (uv, ray) = unsafe { crate::CAM.get_ray(pixel_i, &mut rng) };
+        let cam = unsafe { crate::CAM.get().as_mut_unchecked() };
+        let (uv, ray) = cam.get_ray(pixel_i, &mut rng);
         let (col, ray_count) = match state.integrator {
             IntegratorType::Naive => Naive::rgb(ray, &mut rng),
-            IntegratorType::NEE => NEEMIS::rgb(ray, &mut rng, unsafe {
-                &*std::ptr::addr_of!(crate::SAMPLABLE)
-            }),
+            IntegratorType::NEE => {
+                NEEMIS::rgb(ray, &mut rng, unsafe { SAMPLABLE.get().as_ref_unchecked() })
+            }
         };
         splats.push(Splat::new(uv, col));
         rays += ray_count;

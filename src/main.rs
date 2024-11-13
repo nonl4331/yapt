@@ -1,5 +1,9 @@
-#![feature(get_mut_unchecked)]
-#[allow(static_mut_refs)]
+#![feature(
+    get_mut_unchecked,
+    sync_unsafe_cell,
+    ptr_as_ref_unchecked,
+    once_cell_get_mut
+)]
 pub const WIDTH: u32 = 1024;
 pub const HEIGHT: u32 = 1024;
 const SAMPLES: u64 = 10000;
@@ -28,6 +32,7 @@ pub mod prelude {
     pub use bvh::Bvh;
     pub use derive_new::new;
     pub use std::{
+        cell::SyncUnsafeCell,
         collections::HashMap,
         f32::consts::*,
         fmt,
@@ -36,25 +41,27 @@ pub mod prelude {
     };
     pub use utility::{Ray, Vec2, Vec3};
 }
+use std::sync::Mutex;
+
 use prelude::*;
 
 use clap::Parser;
-use once_cell::unsync::Lazy;
 
 const CHUNK_SIZE: usize = 4096;
 
 const BOOTSTRAP_CHAINS: usize = 100_000;
 const CHAINS: usize = 100;
 
-pub static mut VERTICES: Vec<Vec3> = vec![];
-pub static mut NORMALS: Vec<Vec3> = vec![];
-pub static mut MATERIALS: Vec<Mat> = vec![];
-pub static mut TRIANGLES: Vec<Tri> = vec![];
-pub static mut SAMPLABLE: Vec<usize> = vec![];
-pub static mut BVH: Bvh = Bvh { nodes: vec![] };
-pub static mut MATERIAL_NAMES: Lazy<HashMap<String, usize>> = Lazy::new(HashMap::new);
-pub static mut ENVMAP: EnvMap = EnvMap::DEFAULT;
-pub static mut CAM: Cam = crate::camera::PLACEHOLDER;
+pub static VERTICES: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
+pub static NORMALS: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
+pub static MATERIALS: SyncUnsafeCell<Vec<Mat>> = SyncUnsafeCell::new(vec![]);
+pub static TRIANGLES: SyncUnsafeCell<Vec<Tri>> = SyncUnsafeCell::new(vec![]);
+pub static SAMPLABLE: SyncUnsafeCell<Vec<usize>> = SyncUnsafeCell::new(vec![]);
+pub static BVH: SyncUnsafeCell<Bvh> = SyncUnsafeCell::new(Bvh { nodes: vec![] });
+pub static MATERIAL_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
+    Mutex::new(std::cell::OnceCell::new());
+pub static ENVMAP: SyncUnsafeCell<EnvMap> = SyncUnsafeCell::new(EnvMap::DEFAULT);
+pub static CAM: SyncUnsafeCell<Cam> = SyncUnsafeCell::new(crate::camera::PLACEHOLDER);
 
 const MAGIC_VALUE_ONE: f32 = 543543521.0;
 const MAGIC_VALUE_ONE_VEC: Vec3 = Vec3::new(MAGIC_VALUE_ONE, MAGIC_VALUE_ONE, MAGIC_VALUE_ONE);
@@ -265,25 +272,33 @@ impl App {
         assert!(rs.v_high >= rs.v_low && rs.v_low <= 1.0);
 
         self.canvas = vec![Vec3::ZERO; rs.width as usize * rs.height as usize];
+        let (cam, bvh, tris, mats, samplables, envmap) = unsafe {
+            (
+                CAM.get().as_mut_unchecked(),
+                BVH.get().as_mut_unchecked(),
+                TRIANGLES.get().as_mut_unchecked(),
+                MATERIALS.get().as_mut_unchecked(),
+                SAMPLABLE.get().as_mut_unchecked(),
+                ENVMAP.get().as_mut_unchecked(),
+            )
+        };
 
         if let Some(ref path) = rs.environment_map {
             if let Ok(image) = TextureData::from_path(path) {
-                unsafe { crate::ENVMAP = EnvMap::Image(image) };
+                *envmap = EnvMap::Image(image);
                 log::info!("Loaded envmap");
             } else {
                 log::warn!("Could not import envmap {path}.");
             }
         }
 
-        unsafe {
-            CAM = crate::scene::setup_scene(&rs);
-            BVH = Bvh::new(&mut *addr_of_mut!(TRIANGLES));
+        *cam = unsafe { crate::scene::setup_scene(&rs) };
+        *bvh = Bvh::new(tris);
 
-            // calculate samplable objects after BVH rearranges TRIANGLES
-            for (i, tri) in TRIANGLES.iter().enumerate() {
-                if let Mat::Light(_) = MATERIALS[tri.mat] {
-                    SAMPLABLE.push(i);
-                }
+        // calculate samplable objects after BVH rearranges TRIANGLES
+        for (i, tri) in tris.iter().enumerate() {
+            if let Mat::Light(_) = mats[tri.mat] {
+                samplables.push(i);
             }
         }
 

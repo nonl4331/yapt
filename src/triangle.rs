@@ -10,9 +10,10 @@ pub struct Tri {
 
 impl Aabound for Tri {
     fn aabb(&self) -> Aabb {
-        let a = unsafe { VERTICES[self.pos[0]] };
-        let b = unsafe { VERTICES[self.pos[1]] };
-        let c = unsafe { VERTICES[self.pos[2]] };
+        let verts = unsafe { VERTICES.get().as_ref_unchecked() };
+        let a = verts[self.pos[0]];
+        let b = verts[self.pos[1]];
+        let c = verts[self.pos[2]];
 
         let min_x = a.x.min(b.x).min(c.x);
         let min_y = a.y.min(b.y).min(c.y);
@@ -48,9 +49,14 @@ impl Aabound for Tri {
 impl Tri {
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Intersection {
-        let v0 = unsafe { VERTICES[self.pos[0]] };
-        let v1 = unsafe { VERTICES[self.pos[1]] };
-        let v2 = unsafe { VERTICES[self.pos[2]] };
+        let verts = unsafe { VERTICES.get().as_ref_unchecked() };
+        let norms = unsafe { NORMALS.get().as_ref_unchecked() };
+        let v0 = verts[self.pos[0]];
+        let v1 = verts[self.pos[1]];
+        let v2 = verts[self.pos[2]];
+        let n0 = norms[self.nor[0]];
+        let n1 = norms[self.nor[1]];
+        let n2 = norms[self.nor[2]];
 
         let ro: Vec3 = Vec3::new(ray.origin.x, ray.origin.y, ray.origin.z);
 
@@ -130,10 +136,6 @@ impl Tri {
 
         let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
 
-        let n0 = unsafe { NORMALS[self.nor[0]] };
-        let n1 = unsafe { NORMALS[self.nor[1]] };
-        let n2 = unsafe { NORMALS[self.nor[2]] };
-
         let normal = b0 * n0 + b1 * n1 + b2 * n2;
         if gnormal.dot(normal) < 0.0 {
             gnormal = -gnormal;
@@ -153,12 +155,15 @@ impl Tri {
     }
     #[must_use]
     pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl MinRng) -> (Ray, Vec3) {
-        let v0 = unsafe { VERTICES[self.pos[0]] };
-        let v1 = unsafe { VERTICES[self.pos[1]] };
-        let v2 = unsafe { VERTICES[self.pos[2]] };
-        let n0 = unsafe { NORMALS[self.nor[0]] };
-        let n1 = unsafe { NORMALS[self.nor[1]] };
-        let n2 = unsafe { NORMALS[self.nor[2]] };
+        let verts = unsafe { VERTICES.get().as_ref_unchecked() };
+        let norms = unsafe { NORMALS.get().as_ref_unchecked() };
+        let mats = unsafe { MATERIALS.get().as_ref_unchecked() };
+        let v0 = verts[self.pos[0]];
+        let v1 = verts[self.pos[1]];
+        let v2 = verts[self.pos[2]];
+        let n0 = norms[self.nor[0]];
+        let n1 = norms[self.nor[1]];
+        let n2 = norms[self.nor[2]];
 
         let uv = rng.gen().sqrt();
         let uv = (1.0 - uv, uv * rng.gen());
@@ -171,15 +176,16 @@ impl Tri {
 
         let ray = Ray::new(sect.pos, dir);
 
-        let le = unsafe { MATERIALS[self.mat].le(point, dir) };
+        let le = mats[self.mat].le(point, dir);
 
         (ray, le)
     }
     #[must_use]
     pub fn pdf(&self, sect: &Intersection, ray: &Ray) -> f32 {
-        let v0 = unsafe { VERTICES[self.pos[0]] };
-        let v1 = unsafe { VERTICES[self.pos[1]] };
-        let v2 = unsafe { VERTICES[self.pos[2]] };
+        let verts = unsafe { VERTICES.get().as_ref_unchecked() };
+        let v0 = verts[self.pos[0]];
+        let v1 = verts[self.pos[1]];
+        let v2 = verts[self.pos[2]];
         let area = 0.5 * (v1 - v0).cross(v2 - v0).mag();
         (sect.pos - ray.origin).mag_sq() / (sect.nor.dot(ray.dir).abs() * area)
     }
