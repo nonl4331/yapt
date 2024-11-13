@@ -241,7 +241,8 @@ impl App {
         render_settings: RenderSettings,
         context: egui::Context,
     ) -> Self {
-        let (update_recv, work_req) = work_handler::create_work_handler();
+        let (update_recv, work_req) =
+            work_handler::create_work_handler(render_settings.num_threads);
         let mut a = Self {
             fb_tex_handle,
             render_settings,

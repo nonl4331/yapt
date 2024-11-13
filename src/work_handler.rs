@@ -2,6 +2,7 @@ use rand_pcg::Pcg64Mcg;
 
 use std::{
     collections::VecDeque,
+    num::NonZeroUsize,
     sync::{
         atomic::{AtomicUsize, Ordering},
         mpsc::{channel, Receiver, Sender},
@@ -138,7 +139,9 @@ impl WorkQueue {
 // ------------------------------
 // Creating the work handler
 // ------------------------------
-pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
+pub fn create_work_handler(
+    num_threads: Option<NonZeroUsize>,
+) -> (Receiver<Update>, Sender<ComputeChange>) {
     let (gui_thread_requester, compute_thread_request_handler) = channel::<ComputeChange>();
     let (update_sender, gui_thread_receiver) = channel::<Update>();
 
@@ -152,7 +155,9 @@ pub fn create_work_handler() -> (Receiver<Update>, Sender<ComputeChange>) {
         // ------------------------------
         // Spawn compute threads
         // ------------------------------
-        let num_threads = num_cpus::get();
+        let num_threads = num_threads
+            .map(|v| usize::from(v))
+            .unwrap_or_else(num_cpus::get);
         log::trace!("Spawned {num_threads} compute threads.");
         for i in 0..num_threads {
             spawn_compute_thread(i as u64, work_queue.clone(), update_sender.clone());
