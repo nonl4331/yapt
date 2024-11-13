@@ -4,8 +4,8 @@
     ptr_as_ref_unchecked,
     once_cell_get_mut
 )]
-pub const WIDTH: u32 = 1024;
-pub const HEIGHT: u32 = 1024;
+pub const WIDTH: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
+pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 const SAMPLES: u64 = 10000;
 const FILENAME: &str = "out.exr";
 
@@ -142,7 +142,10 @@ fn main() {
             let fb_handle = cc.egui_ctx.load_texture(
                 "fb",
                 egui::ImageData::Color(std::sync::Arc::new(egui::ColorImage::new(
-                    [args.width as usize, args.height as usize],
+                    [
+                        u32::from(args.width) as usize,
+                        u32::from(args.height) as usize,
+                    ],
                     egui::Color32::BLACK,
                 ))),
                 egui::TextureOptions::default(),
@@ -162,9 +165,9 @@ pub struct RenderSettings {
     #[arg(short, default_value_t = false)]
     pub bvh_heatmap: bool,
     #[arg(short, long, default_value_t = crate::WIDTH)]
-    pub width: u32,
+    pub width: std::num::NonZeroU32,
     #[arg(short, long, default_value_t = crate::HEIGHT)]
-    pub height: u32,
+    pub height: std::num::NonZeroU32,
     #[arg(short = 'n', long, default_value_t = crate::SAMPLES)]
     pub samples: u64,
     #[arg(short='o', long, default_value_t = String::from(crate::FILENAME))]
@@ -185,6 +188,8 @@ pub struct RenderSettings {
     pub v_low: f32,
     #[arg(long, default_value_t = 1.0)]
     pub v_high: f32,
+    #[arg(long)]
+    pub num_threads: Option<std::num::NonZeroUsize>,
 }
 
 impl Default for RenderSettings {
@@ -203,6 +208,7 @@ impl Default for RenderSettings {
             u_high: 1.0,
             v_low: 0.0,
             v_high: 1.0,
+            num_threads: None,
         }
     }
 }
@@ -271,7 +277,8 @@ impl App {
         assert!(rs.v_low >= 0.0);
         assert!(rs.v_high >= rs.v_low && rs.v_low <= 1.0);
 
-        self.canvas = vec![Vec3::ZERO; rs.width as usize * rs.height as usize];
+        self.canvas =
+            vec![Vec3::ZERO; u32::from(rs.width) as usize * u32::from(rs.height) as usize];
         let (cam, bvh, tris, mats, samplables, envmap) = unsafe {
             (
                 CAM.get().as_mut_unchecked(),
@@ -303,8 +310,8 @@ impl App {
         }
 
         let state = State::new(
-            rs.width as usize,
-            rs.height as usize,
+            u32::from(rs.width) as usize,
+            u32::from(rs.height) as usize,
             self.context.clone(),
             rs.integrator,
             0,
@@ -317,8 +324,8 @@ impl App {
     // reset canvas and state and prepare for a new workload
     pub fn next_workload(&mut self) {
         let state = State::new(
-            self.render_settings.width as usize,
-            self.render_settings.height as usize,
+            u32::from(self.render_settings.width) as usize,
+            u32::from(self.render_settings.height) as usize,
             self.context.clone(),
             self.render_settings.integrator,
             0,
@@ -329,8 +336,8 @@ impl App {
         self.workload_id = self.workload_id.wrapping_add(1);
         self.canvas = vec![
             Vec3::ZERO;
-            self.render_settings.width as usize
-                * self.render_settings.height as usize
+            u32::from(self.render_settings.width) as usize
+                * u32::from(self.render_settings.height) as usize
         ];
         self.work_rays = 0;
         self.splats_done = 0;

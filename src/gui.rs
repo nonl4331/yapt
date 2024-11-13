@@ -18,7 +18,9 @@ impl eframe::App for App {
                     self.work_duration += self.work_start.elapsed();
                     self.work_start = std::time::Instant::now();
                     self.splats_done += splats.len() as u64;
-                    if self.splats_done == rs.width as u64 * rs.height as u64 * rs.samples {
+                    if self.splats_done
+                        == u32::from(rs.width) as u64 * u32::from(rs.height) as u64 * rs.samples
+                    {
                         log::info!(
                             "Reached end of workload: Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples: {}",
                             (self.work_rays as f64 / self.work_duration.as_secs_f64())
@@ -34,11 +36,12 @@ impl eframe::App for App {
                         let idx = {
                             assert!(uv[0] <= 1.0 && uv[1] <= 1.0);
 
-                            let x = (uv[0] * rs.width as f32) as usize;
-                            let y = (uv[1] * rs.height as f32) as usize;
+                            let x = (uv[0] * u32::from(rs.width) as f32) as usize;
+                            let y = (uv[1] * u32::from(rs.height) as f32) as usize;
 
-                            (y * rs.width as usize + x)
-                                .min(rs.width as usize * rs.height as usize - 1)
+                            (y * u32::from(rs.width) as usize + x).min(
+                                u32::from(rs.width) as usize * u32::from(rs.height) as usize - 1,
+                            )
                         };
 
                         self.canvas[idx] += splat.rgb;
@@ -61,7 +64,8 @@ impl eframe::App for App {
         // -----------------------------------------------
         if self.updated && self.last_update.elapsed() > std::time::Duration::from_millis(500) {
             // update texture
-            let mult = ((rs.width * rs.height) as f64 / self.splats_done as f64) as f32;
+            let mult = ((u32::from(rs.width) * u32::from(rs.height)) as f64
+                / self.splats_done as f64) as f32;
             let buf = self
                 .canvas
                 .par_iter()
@@ -83,7 +87,7 @@ impl eframe::App for App {
                 .collect();
 
             let raw_buf = egui::ColorImage {
-                size: [rs.width as usize, rs.height as usize],
+                size: [u32::from(rs.width) as usize, u32::from(rs.height) as usize],
                 pixels: buf,
             };
             self.fb_tex_handle

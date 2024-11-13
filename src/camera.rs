@@ -47,7 +47,8 @@ impl Cam {
     ) -> Self {
         let forward = (look_at - origin).normalised();
         up.normalise();
-        let aspect_ratio = render_settings.width as f32 / render_settings.height as f32;
+        let aspect_ratio =
+            u32::from(render_settings.width) as f32 / u32::from(render_settings.height) as f32;
 
         let right_mag = focus_dist * 2.0 * (0.5 * hfov.to_radians()).tan();
         let up_mag = right_mag / aspect_ratio;
@@ -65,8 +66,8 @@ impl Cam {
             up,
             right,
             origin,
-            width: render_settings.width,
-            height: render_settings.height,
+            width: render_settings.width.into(),
+            height: render_settings.height.into(),
         }
     }
     #[must_use]
