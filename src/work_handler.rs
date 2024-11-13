@@ -95,12 +95,14 @@ impl WorkQueue {
     ) {
         let s = unsafe { Arc::<WorkQueue>::get_mut_unchecked(queue) };
         let old_index = s.read.swap(Self::QUEUE_BUSY, Ordering::SeqCst);
-        s.queue.append(&mut new_work);
-
-        // trim old data
-        if old_index < s.queue.len() {
+        if old_index == Self::QUEUE_EMPTY {
+            s.queue.clear();
+        } else if old_index < s.queue.len() {
+            // trim old data
             s.queue = s.queue.split_off(old_index);
         }
+        s.queue.append(&mut new_work);
+
         if s.queue.is_empty() {
             s.read.store(Self::QUEUE_EMPTY, Ordering::SeqCst);
         } else {

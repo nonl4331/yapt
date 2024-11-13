@@ -20,7 +20,7 @@ impl eframe::App for App {
                     self.splats_done += splats.len() as u64;
                     if self.splats_done == rs.width as u64 * rs.height as u64 * rs.samples {
                         log::info!(
-                            "Reached end of workload: Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples: {}",
+                            "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - {}",
                             (self.work_rays as f64 / self.work_duration.as_secs_f64())
                                 / 1000000 as f64,
                             self.work_rays,
@@ -125,13 +125,13 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| ui.button("Export Camera"));
-                if ui.button("Add 100 samples").clicked() {
+                if ui.button("Add 1k samples").clicked() {
                     if rs.samples == 0 {
                         self.work_start = std::time::Instant::now();
                     }
-                    rs.samples += 100;
+                    rs.samples += 5;
                     self.work_req
-                        .send(ComputeChange::WorkSamples(100, self.workload_id))
+                        .send(ComputeChange::WorkSamples(5, self.workload_id))
                         .unwrap();
                 }
                 if ui.button("Show render settings").clicked() {
