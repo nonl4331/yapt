@@ -83,6 +83,12 @@ impl Aabb {
     }
 }
 
+impl Aabound for Aabb {
+    fn aabb(&self) -> Aabb {
+        *self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
