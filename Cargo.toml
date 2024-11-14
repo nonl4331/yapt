@@ -17,17 +17,14 @@ bvh = { path = "crates/bvh" }
 utility = { path = "crates/utility" }
 rand = "0.8.5"
 log = { version = "0.4.19", features = ["std"] }
-indicatif = "0.17.3"
 env_logger = "0.11.3"
 tobj = "4.0.0"
-once_cell = "1.18.0"
 clap = { version = "4.4.12", features = ["derive"] }
 rand_pcg = "0.3.1"
 exr = "1.71.0"
 rand_distr = "0.4.3"
 eframe = { version = "0.29.1", optional = true }
 egui = { version = "0.29.1", optional = true }
-crossbeam-deque = "0.8.5"
 num_cpus = "1.16.0"
 
 [dev-dependencies]

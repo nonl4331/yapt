@@ -197,6 +197,19 @@ fn main() {
                 }
                 app.work_rays += ray_count;
 
+                // update progress
+                if app.updated && app.last_update.elapsed() > std::time::Duration::from_millis(250)
+                {
+                    log::info!(
+                        "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
+                        (app.work_rays as f64 / app.work_duration.as_secs_f64()) / 1000000 as f64,
+                        app.work_rays,
+                        app.work_duration.as_secs_f64(),
+                    );
+                    app.updated = false;
+                    app.last_update = std::time::Instant::now();
+                }
+
                 // work queue cleared
                 if app.splats_done
                     == u32::from(rs.width) as u64 * u32::from(rs.height) as u64 * rs.samples
