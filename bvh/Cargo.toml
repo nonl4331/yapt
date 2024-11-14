@@ -12,3 +12,9 @@ utility = { path = "../utility"}
 rand = { version = "0.8.5", features = [ "small_rng" ] }
 rand_core = "0.6.4"
 rand_seeder = "0.2.3"
+divan = "0.1.15"
+
+
+[[bench]]
+name = "bvh"
+harness = false
