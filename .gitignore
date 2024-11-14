@@ -2,3 +2,5 @@
 **/Cargo.lock
 **/*.exr
 **/*.png
+perf.data
+flamegraph.svg

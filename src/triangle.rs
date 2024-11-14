@@ -47,6 +47,7 @@ impl Aabound for Tri {
 }
 
 impl Tri {
+    // see whoop 2013 https://jcgt.org/published/0002/01/05/paper.pdf
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Intersection {
         let verts = unsafe { VERTICES.get().as_ref_unchecked() };
