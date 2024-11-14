@@ -115,14 +115,14 @@ mod tests {
         let extent = aabb.extent();
 
         let mut gen_ray = || -> Ray {
-            let mut origin = Vec3::zeros();
-            while origin == Vec3::zeros() {
+            let mut origin = Vec3::ZERO;
+            while origin == Vec3::ZERO {
                 origin = Vec3::new(
                     rng.gen_range(-1.0..1.0),
                     rng.gen_range(-1.0..1.0),
                     rng.gen_range(-1.0..1.0),
                 )
-                .normalize()
+                .normalised()
                     * 15.0;
             }
 
@@ -133,7 +133,7 @@ mod tests {
                     rng.gen_range(0.0..1.0) * extent.z,
                 );
 
-            let dir = (point_in_aabb - origin).normalize();
+            let dir = (point_in_aabb - origin).normalised();
             Ray::new(origin, dir)
         };
 
