@@ -6,13 +6,13 @@
 )]
 pub const WIDTH: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
-const SAMPLES: u64 = 10000;
-const FILENAME: &str = "out.exr";
+const SAMPLES: u64 = 1000;
 
 pub mod camera;
 pub mod coord;
 pub mod distributions;
 pub mod envmap;
+#[cfg(feature = "gui")]
 pub mod gui;
 pub mod integrator;
 pub mod loader;
@@ -134,29 +134,91 @@ fn main() {
 
     let args = RenderSettings::parse();
 
-    eframe::run_native(
-        "yapt",
-        eframe::NativeOptions::default(),
-        Box::new(|cc| {
-            // framebuffer for displying render to the screen
-            let fb_handle = cc.egui_ctx.load_texture(
-                "fb",
-                egui::ImageData::Color(std::sync::Arc::new(egui::ColorImage::new(
-                    [
-                        u32::from(args.width) as usize,
-                        u32::from(args.height) as usize,
-                    ],
-                    egui::Color32::BLACK,
-                ))),
-                egui::TextureOptions::default(),
-            );
+    // GUI mode
+    #[cfg(feature = "gui")]
+    if !args.headless {
+        eframe::run_native(
+            "yapt",
+            eframe::NativeOptions::default(),
+            Box::new(|cc| {
+                // framebuffer for displying render to the screen
+                let fb_handle = cc.egui_ctx.load_texture(
+                    "fb",
+                    egui::ImageData::Color(std::sync::Arc::new(egui::ColorImage::new(
+                        [
+                            u32::from(args.width) as usize,
+                            u32::from(args.height) as usize,
+                        ],
+                        egui::Color32::BLACK,
+                    ))),
+                    egui::TextureOptions::default(),
+                );
 
-            let app = App::new(fb_handle, args.clone(), cc.egui_ctx.clone());
+                let app = App::new(Some((cc.egui_ctx.clone(), fb_handle)), args.clone());
 
-            Ok(Box::new(app))
-        }),
-    )
-    .unwrap();
+                Ok(Box::new(app))
+            }),
+        )
+        .unwrap();
+        return;
+    }
+
+    // headless mode
+    let mut app = App::new(
+        #[cfg(feature = "gui")]
+        None,
+        args.clone(),
+    );
+    let rs = &mut app.render_settings;
+    while let Ok(update) = app.update_recv.recv() {
+        match update {
+            Update::Calculation(splats, workload_id, ray_count)
+                if workload_id == app.workload_id =>
+            {
+                app.work_duration += app.work_start.elapsed();
+                app.work_start = std::time::Instant::now();
+                app.splats_done += splats.len() as u64;
+
+                // add splats to image
+                for splat in splats {
+                    let uv = splat.uv;
+                    let idx = {
+                        assert!(uv[0] <= 1.0 && uv[1] <= 1.0);
+
+                        let x = (uv[0] * u32::from(rs.width) as f32) as usize;
+                        let y = (uv[1] * u32::from(rs.height) as f32) as usize;
+
+                        (y * u32::from(rs.width) as usize + x)
+                            .min(u32::from(rs.width) as usize * u32::from(rs.height) as usize - 1)
+                    };
+
+                    app.canvas[idx] += splat.rgb;
+                    app.updated = true;
+                }
+                app.work_rays += ray_count;
+
+                // work queue cleared
+                if app.splats_done
+                    == u32::from(rs.width) as u64 * u32::from(rs.height) as u64 * rs.samples
+                {
+                    log::info!(
+                            "Render finished: Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples: {}",
+                            (app.work_rays as f64 / app.work_duration.as_secs_f64())
+                                / 1000000 as f64,
+                            app.work_rays,
+                            app.work_duration.as_secs_f64(),
+                            rs.samples
+                        );
+                    break;
+                }
+            }
+            Update::Calculation(_, workload_id, _) => {
+                log::trace!("Got splats from previous workload {workload_id}!")
+            }
+            Update::PssmltBootstrapDone => log::info!("PSSMLT bootstrap done!"),
+            Update::NoState => log::info!("No state found!"),
+        }
+    }
 }
 
 #[derive(Parser, Clone)]
@@ -170,7 +232,7 @@ pub struct RenderSettings {
     pub height: std::num::NonZeroU32,
     #[arg(short = 'n', long, default_value_t = crate::SAMPLES)]
     pub samples: u64,
-    #[arg(short='o', long, default_value_t = String::from(crate::FILENAME))]
+    #[arg(short='o', long, default_value_t = String::new())]
     pub filename: String,
     #[arg(short, long, default_value_t = IntegratorType::default())]
     pub integrator: IntegratorType,
@@ -190,6 +252,9 @@ pub struct RenderSettings {
     pub v_high: f32,
     #[arg(long)]
     pub num_threads: Option<std::num::NonZeroUsize>,
+    #[cfg(feature = "gui")]
+    #[arg(long)]
+    pub headless: bool,
 }
 
 impl Default for RenderSettings {
@@ -199,7 +264,7 @@ impl Default for RenderSettings {
             width: crate::WIDTH,
             height: crate::HEIGHT,
             samples: crate::SAMPLES,
-            filename: String::from(crate::FILENAME),
+            filename: String::new(),
             integrator: IntegratorType::default(),
             scene: Scene::default(),
             pssmlt: false,
@@ -209,6 +274,8 @@ impl Default for RenderSettings {
             v_low: 0.0,
             v_high: 1.0,
             num_threads: None,
+            #[cfg(feature = "gui")]
+            headless: false,
         }
     }
 }
@@ -216,8 +283,8 @@ impl Default for RenderSettings {
 pub struct App {
     pub render_settings: RenderSettings,
     // egui state
-    pub fb_tex_handle: egui::TextureHandle,
-    pub context: egui::Context,
+    #[cfg(feature = "gui")]
+    pub egui_state: Option<(egui::Context, egui::TextureHandle)>,
     // communication
     pub update_recv: std::sync::mpsc::Receiver<Update>,
     pub work_req: std::sync::mpsc::Sender<ComputeChange>,
@@ -232,21 +299,21 @@ pub struct App {
     pub updated: bool,
     pub workload_id: u8,
     // gui state
+    #[cfg(feature = "gui")]
     pub display_settings: bool,
 }
 
 impl App {
     pub fn new(
-        fb_tex_handle: egui::TextureHandle,
+        #[cfg(feature = "gui")] egui_state: Option<(egui::Context, egui::TextureHandle)>,
         render_settings: RenderSettings,
-        context: egui::Context,
     ) -> Self {
         let (update_recv, work_req) =
             work_handler::create_work_handler(render_settings.num_threads);
         let mut a = Self {
-            fb_tex_handle,
+            #[cfg(feature = "gui")]
+            egui_state,
             render_settings,
-            context,
             update_recv,
             work_req,
             canvas: Vec::new(),
@@ -257,6 +324,7 @@ impl App {
             workload_id: 0,
             work_rays: 0,
             updated: false,
+            #[cfg(feature = "gui")]
             display_settings: false,
         };
         a.init();
@@ -313,7 +381,8 @@ impl App {
         let state = State::new(
             u32::from(rs.width) as usize,
             u32::from(rs.height) as usize,
-            self.context.clone(),
+            #[cfg(feature = "gui")]
+            self.egui_state.as_ref().map(|v| v.0.clone()),
             rs.integrator,
             0,
         );
@@ -327,7 +396,8 @@ impl App {
         let state = State::new(
             u32::from(self.render_settings.width) as usize,
             u32::from(self.render_settings.height) as usize,
-            self.context.clone(),
+            #[cfg(feature = "gui")]
+            self.egui_state.as_ref().map(|v| v.0.clone()),
             self.render_settings.integrator,
             0,
         );

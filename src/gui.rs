@@ -5,6 +5,7 @@ use rayon::prelude::*;
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let rs = &mut self.render_settings;
+        let (_, tex_handle) = self.egui_state.as_mut().unwrap();
         // -----------------------------------------------
         // Handle updates from work handling threads and compute threads
         // Note that Update::Calculation does not present directly to the GUI
@@ -18,18 +19,7 @@ impl eframe::App for App {
                     self.work_duration += self.work_start.elapsed();
                     self.work_start = std::time::Instant::now();
                     self.splats_done += splats.len() as u64;
-                    if self.splats_done
-                        == u32::from(rs.width) as u64 * u32::from(rs.height) as u64 * rs.samples
-                    {
-                        log::info!(
-                            "Reached end of workload: Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples: {}",
-                            (self.work_rays as f64 / self.work_duration.as_secs_f64())
-                                / 1000000 as f64,
-                            self.work_rays,
-                            self.work_duration.as_secs_f64(),
-                            rs.samples
-                        );
-                    }
+
                     // add splats to image
                     for splat in splats {
                         let uv = splat.uv;
@@ -48,11 +38,24 @@ impl eframe::App for App {
                         self.updated = true;
                     }
                     self.work_rays += ray_count;
+
+                    // work queue finished
+                    if self.splats_done
+                        == u32::from(rs.width) as u64 * u32::from(rs.height) as u64 * rs.samples
+                    {
+                        log::info!(
+                            "Reached end of workload: Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples: {}",
+                            (self.work_rays as f64 / self.work_duration.as_secs_f64())
+                                / 1000000 as f64,
+                            self.work_rays,
+                            self.work_duration.as_secs_f64(),
+                            rs.samples
+                        );
+                    }
                 }
                 Update::Calculation(_, workload_id, _) => {
                     log::trace!("Got splats from previous workload {workload_id}!")
                 }
-                Update::WorkQueueCleared => log::info!("Work queue cleared!"),
                 Update::PssmltBootstrapDone => log::info!("PSSMLT bootstrap done!"),
                 Update::NoState => log::info!("No state found!"),
             }
@@ -90,9 +93,8 @@ impl eframe::App for App {
                 size: [u32::from(rs.width) as usize, u32::from(rs.height) as usize],
                 pixels: buf,
             };
-            self.fb_tex_handle
-                .set(raw_buf, egui::TextureOptions::default());
-            self.context.request_repaint();
+            tex_handle.set(raw_buf, egui::TextureOptions::default());
+            ctx.request_repaint();
             self.updated = false;
             self.last_update = std::time::Instant::now();
         }
@@ -121,6 +123,7 @@ impl eframe::App for App {
         }
 
         let rs = &mut self.render_settings;
+        let (ctx, tex_handle) = self.egui_state.as_ref().unwrap();
 
         // -----------------------------------------------
         // Draw GUI
@@ -149,8 +152,8 @@ impl eframe::App for App {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            let size = self.fb_tex_handle.size_vec2();
-            let sized_tex = egui::load::SizedTexture::new(&self.fb_tex_handle, size);
+            let size = tex_handle.size_vec2();
+            let sized_tex = egui::load::SizedTexture::new(tex_handle, size);
             ui.add(egui::Image::new(sized_tex).shrink_to_fit().max_size(size));
         });
         egui::Window::new("Render Settings")

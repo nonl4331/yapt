@@ -23,7 +23,6 @@ pub enum Update {
     // splats, workload_id, rays shot
     Calculation(Vec<Splat>, u8, u64),
     PssmltBootstrapDone,
-    WorkQueueCleared,
     NoState,
 }
 
@@ -38,7 +37,8 @@ pub enum ComputeChange {
 pub struct State {
     width: usize,
     height: usize,
-    ctx: egui::Context,
+    #[cfg(feature = "gui")]
+    ctx: Option<egui::Context>,
     integrator: IntegratorType,
     base_rng_seed: u64,
 }
@@ -47,13 +47,14 @@ impl State {
     pub fn new(
         width: usize,
         height: usize,
-        ctx: egui::Context,
+        #[cfg(feature = "gui")] ctx: Option<egui::Context>,
         integrator: IntegratorType,
         base_rng_seed: u64,
     ) -> Self {
         State {
             width,
             height,
+            #[cfg(feature = "gui")]
             ctx,
             integrator,
             base_rng_seed,
@@ -256,7 +257,10 @@ fn spawn_compute_thread(
                 "Thread {thread_id} finished work {work_id} as part of workload {workload_id}."
             );
             update_sender.send(work_result).unwrap();
-            state.ctx.request_repaint();
+            #[cfg(feature = "gui")]
+            if let Some(ctx) = &state.ctx {
+                ctx.request_repaint();
+            }
         }
     });
 }
