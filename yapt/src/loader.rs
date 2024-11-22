@@ -33,7 +33,7 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
     let norms = unsafe { NORMALS.get().as_mut_unchecked() };
     let mut lock = MATERIAL_NAMES.lock().unwrap();
     let mat_names = lock.get_mut_or_init(HashMap::new);
-    let (models, model_mats) = tobj::load_obj(
+    let (models, model_mats) = match tobj::load_obj(
         path,
         &tobj::LoadOptions {
             triangulate: true,
@@ -41,8 +41,13 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
             ignore_lines: true,
             ..Default::default()
         },
-    )
-    .unwrap();
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("{e}");
+            std::process::exit(0);
+        }
+    };
 
     let mut total = 0;
 

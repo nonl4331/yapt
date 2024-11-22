@@ -9,6 +9,7 @@ pub enum Scene {
     SphereLeftRight,
     FurnaceTest,
     Room,
+    SponzaIvy,
 }
 impl fmt::Display for Scene {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -19,6 +20,7 @@ impl fmt::Display for Scene {
             Self::SphereLeftRight => "sphere_left_right",
             Self::FurnaceTest => "furnace_test",
             Self::Room => "room",
+            Self::SponzaIvy => "sponza_ivy",
         };
         write!(f, "{s}")
     }
@@ -31,6 +33,7 @@ pub unsafe fn setup_scene(render_settings: &RenderSettings) -> Cam {
         Scene::SphereLeftRight => scene_sphere_left_right(render_settings),
         Scene::FurnaceTest => scene_furnace_test(render_settings),
         Scene::Room => scene_room(render_settings),
+        Scene::SponzaIvy => scene_sponza_ivy(render_settings),
     }
 }
 unsafe fn scene_one(render_settings: &RenderSettings) -> Cam {
@@ -148,6 +151,24 @@ unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
     Cam::new(
         Vec3::new(3.0, -3.0, 1.8),
         Vec3::new(0.0, 0.0, 0.0),
+        Vec3::Z,
+        70.0,
+        1.0,
+        render_settings,
+    )
+}
+
+unsafe fn scene_sponza_ivy(render_settings: &RenderSettings) -> Cam {
+    loader::add_material("rest", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
+    loader::add_material(
+        "green",
+        Mat::Glossy(Ggx::new(0.95, Vec3::new(0.0, 1.0, 0.0))),
+    );
+    let model_map = loader::create_model_map(vec![("default", "rest"), ("IvyLeaf", "green")]);
+    loader::load_obj("res/sponza_ivy.obj", 1.0, Vec3::ZERO, &model_map);
+    Cam::new(
+        Vec3::new(5.0, 0.92, 9.7475),
+        Vec3::new(3.0, -0.3, 9.7475),
         Vec3::Z,
         70.0,
         1.0,
