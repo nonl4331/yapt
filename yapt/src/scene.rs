@@ -166,10 +166,11 @@ unsafe fn scene_sponza_ivy(render_settings: &RenderSettings) -> Cam {
     );
     let model_map = loader::create_model_map(vec![("default", "rest"), ("IvyLeaf", "green")]);
     loader::load_obj("res/sponza_ivy.obj", 1.0, Vec3::ZERO, &model_map);
-    Cam::new_quat(
+    Cam::new_rot(
         Vec3::new(6.8876, -0.082649, 10.742),
-        Quaternion::new(0.437, 0.505, 0.563, 0.487),
+        Vec3::new(98.27, 0.0, 96.0),
         70.0,
         render_settings,
+        true,
     )
 }

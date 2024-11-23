@@ -36,8 +36,9 @@ pub struct Cam {
 }
 
 impl Cam {
-    // todo: figure out how to properly go blender XYZ euler -> quat
-    /*#[must_use]
+    // based on blender see https://github.com/blender/blender/blob/6768f9120b9437d5c83b17544c1d6fe4df6ed512/source/blender/blenlib/intern/math_rotation.c#L1639
+    // match blender default where default is up = Y, forward = -Z (still in space with Z up)
+    #[must_use]
     pub fn new_rot(
         origin: Vec3,
         mut rotation: Vec3,
@@ -49,25 +50,25 @@ impl Cam {
             rotation *= std::f32::consts::PI / 180.0;
         }
 
-        let (roll, pitch, yaw) = (rotation[1] * 0.5, rotation[0] * 0.5, -rotation[2] * 0.5);
+        rotation *= 0.5;
 
-        let (sr, cr) = roll.sin_cos();
-        let (sp, cp) = pitch.sin_cos();
-        let (sy, cy) = yaw.sin_cos();
+        let (sx, cx) = rotation.x.sin_cos();
+        let (sy, cy) = rotation.y.sin_cos();
+        let (sz, cz) = rotation.z.sin_cos();
 
-        // w, x, y, z
         let q = Quaternion::new(
-            cr * cp * cy + sr * sp * sy,
-            sr * cp * cy - cr * sp * sy,
-            cr * sp * cy + sr * cp * sy,
-            cr * cp * sy - sr * sp * cy,
+            cx * cy * cz + sx * sy * sz,
+            sx * cy * cz - cx * sy * sz,
+            cx * sy * cz + sx * cy * sz,
+            cx * cy * sz - sx * sy * cz,
         );
 
         Self::new_quat(origin, q, hfov, render_settings)
-    }*/
+    }
 
     // see https://math.stackexchange.com/questions/40164/how-do-you-rotate-a-vector-by-a-unit-quaternion
     // and https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
+    // match blender default where default is up = Y, forward = -Z (still in space with Z up)
     #[must_use]
     pub fn new_quat(
         origin: Vec3,
@@ -77,8 +78,6 @@ impl Cam {
     ) -> Self {
         let qp = q.conj();
 
-        // match blender default where default is up = Y, forward = -Z (still in space with Z up
-        // and Y forward)
         let up: Quaternion = Vec3::new(0.0, 1.0, 0.0).into();
         let up = q.hamilton(up).hamilton(qp).xyz();
 
