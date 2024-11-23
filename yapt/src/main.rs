@@ -24,10 +24,10 @@ pub mod work_handler;
 
 pub mod prelude {
     pub use crate::{
-        camera::Cam, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng, scene::Scene,
-        triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings, Splat, BVH,
-        CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES, VERTICES,
-        WIDTH,
+        camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
+        scene::Scene, triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings,
+        Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES,
+        VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;

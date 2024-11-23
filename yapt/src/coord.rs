@@ -43,6 +43,40 @@ impl Coordinate {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Quaternion {
+    w: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+impl Quaternion {
+    pub const fn new(w: f32, x: f32, y: f32, z: f32) -> Self {
+        Self { w, x, y, z }
+    }
+    pub const fn hamilton(&self, other: Self) -> Self {
+        Self::new(
+            self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z,
+            self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+            self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+            self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
+        )
+    }
+    pub const fn xyz(&self) -> Vec3 {
+        Vec3::new(self.x, self.y, self.z)
+    }
+    pub const fn conj(&self) -> Self {
+        Self::new(self.w, -self.x, -self.y, -self.z)
+    }
+}
+
+impl From<Vec3> for Quaternion {
+    fn from(v: Vec3) -> Self {
+        Self::new(0.0, v.x, v.y, v.z)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
