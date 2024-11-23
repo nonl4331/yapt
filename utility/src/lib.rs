@@ -237,32 +237,37 @@ impl Vec3 {
     }
 
     #[inline]
-    pub fn zyx(&self) -> Self {
+    pub const fn zyx(&self) -> Self {
         Self::new(self.z, self.y, self.x)
     }
 
     #[inline]
-    pub fn xzy(&self) -> Self {
+    pub const fn xzy(&self) -> Self {
         Self::new(self.x, self.z, self.y)
     }
 
     #[inline]
-    pub fn yxz(&self) -> Self {
+    pub const fn yxz(&self) -> Self {
         Self::new(self.y, self.x, self.z)
     }
 
     #[inline]
-    pub fn from_spherical(sin_theta: f32, cos_theta: f32, sin_phi: f32, cos_phi: f32) -> Self {
+    pub const fn from_spherical(
+        sin_theta: f32,
+        cos_theta: f32,
+        sin_phi: f32,
+        cos_phi: f32,
+    ) -> Self {
         Vec3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta)
     }
 
     #[inline]
-    pub fn dot(&self, other: Self) -> f32 {
+    pub const fn dot(&self, other: Self) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
     #[inline]
-    pub fn cross(&self, other: Self) -> Self {
+    pub const fn cross(&self, other: Self) -> Self {
         Vec3::new(
             self.y * other.z - self.z * other.y,
             self.z * other.x - self.x * other.z,
@@ -271,7 +276,7 @@ impl Vec3 {
     }
 
     #[inline]
-    pub fn mag_sq(&self) -> f32 {
+    pub const fn mag_sq(&self) -> f32 {
         self.dot(*self)
     }
 
@@ -343,38 +348,42 @@ impl Vec3 {
 }
 
 impl Vec2 {
+    pub const ZERO: Self = Self::zero();
+    pub const ONE: Self = Self::one();
+    pub const X: Self = Self::x();
+    pub const Y: Self = Self::y();
     #[inline]
-    pub fn new(x: f32, y: f32) -> Self {
+    pub const fn new(x: f32, y: f32) -> Self {
         Vec2 { x, y }
     }
 
     #[inline]
-    pub fn one() -> Self {
+    pub const fn one() -> Self {
         Vec2::new(1.0, 1.0)
     }
 
     #[inline]
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Vec2::new(0.0, 0.0)
     }
 
     #[inline]
-    pub fn x() -> Self {
+    pub const fn x() -> Self {
         Vec2::new(1.0, 0.0)
     }
 
     #[inline]
-    pub fn y() -> Self {
+    pub const fn y() -> Self {
         Vec2::new(0.0, 1.0)
     }
 
     #[inline]
-    pub fn dot(&self, other: Self) -> f32 {
+    pub const fn dot(&self, other: Self) -> f32 {
         self.x * other.x + self.y * other.y
     }
 
     #[inline]
-    pub fn mag_sq(&self) -> f32 {
+    pub const fn mag_sq(&self) -> f32 {
         self.dot(*self)
     }
     #[inline]

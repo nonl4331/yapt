@@ -150,9 +150,11 @@ impl Tri {
 
         let mut point = b0 * v0 + b1 * v1 + b2 * v2;
 
+        let uv = b0 * Vec2::zero() + b1 * Vec2::y() + b2 * Vec2::one();
+
         point += normal * 0.000001;
 
-        Intersection::new(t, point, normal, out, self.mat, 0)
+        Intersection::new(t, uv, point, normal, out, self.mat, 0)
     }
     #[must_use]
     pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl MinRng) -> (Ray, Vec3) {

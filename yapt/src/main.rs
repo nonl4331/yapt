@@ -19,15 +19,16 @@ pub mod loader;
 pub mod material;
 pub mod pssmlt;
 pub mod scene;
+pub mod texture;
 pub mod triangle;
 pub mod work_handler;
 
 pub mod prelude {
     pub use crate::{
         camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
-        scene::Scene, triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings,
-        Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TRIANGLES,
-        VERTICES, WIDTH,
+        scene::Scene, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
+        RenderSettings, Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
+        SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -99,6 +100,7 @@ impl fmt::Display for IntegratorType {
 #[derive(Debug, new)]
 pub struct Intersection {
     pub t: f32,
+    pub uv: Vec2,
     pub pos: Vec3,
     pub nor: Vec3,
     pub out: bool,
@@ -109,6 +111,7 @@ pub struct Intersection {
 impl Intersection {
     pub const NONE: Self = Self {
         t: -1.0,
+        uv: Vec2::ZERO,
         pos: Vec3::ZERO,
         nor: Vec3::ZERO,
         out: false,
