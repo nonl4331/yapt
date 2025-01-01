@@ -48,6 +48,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
     let tris = unsafe { TRIANGLES.get().as_mut_unchecked() };
     let verts = unsafe { VERTICES.get().as_mut_unchecked() };
     let norms = unsafe { NORMALS.get().as_mut_unchecked() };
+    let uvs = unsafe { UVS.get().as_mut_unchecked() };
     let mut lock = MATERIAL_NAMES.lock().unwrap();
     let mat_names = lock.get_mut_or_init(HashMap::new);
     let mut lock_tex = TEXTURE_NAMES.lock().unwrap();
@@ -150,6 +151,10 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                         gltf::mesh::Mode::Triangles => {
                             let vert_offset = verts.len();
                             let norm_offset = norms.len();
+                            let uv_offset = uvs.len();
+                            fn normalize_uv(uv: Vec2) -> Vec2 {
+                                Vec2::new(uv.x - uv.x.floor(), uv.y - uv.y.floor())
+                            }
 
                             let apply_transform = |v: Vec3| -> Vec3 {
                                 let v = v.hadamard(local_scale);
@@ -174,8 +179,16 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                                 .map(apply_transform)
                                 .collect();
 
-                            verts.extend(&new_verticies);
+                            let new_uvs: Vec<Vec2> = reader
+                                .read_tex_coords(0)
+                                .unwrap()
+                                .into_f32()
+                                .map(|v| normalize_uv(v.into()))
+                                .collect();
+
+                            verts.extend(new_verticies);
                             norms.extend(new_normals);
+                            uvs.extend(new_uvs);
 
                             let new_tris: Vec<_> = reader
                                 .read_indices()
@@ -191,6 +204,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                                     Tri::new(
                                         [a + vert_offset, b + vert_offset, c + vert_offset],
                                         [a + norm_offset, b + norm_offset, c + norm_offset],
+                                        [a + uv_offset, b + uv_offset, c + uv_offset],
                                         idx,
                                     )
                                 })

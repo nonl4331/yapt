@@ -5,6 +5,7 @@ use bvh::aabb::{Aabb, Aabound};
 pub struct Tri {
     pos: [usize; 3],
     nor: [usize; 3],
+    uv: [usize; 3],
     pub mat: usize,
 }
 
@@ -52,13 +53,16 @@ impl Tri {
     pub fn intersect(&self, ray: &Ray) -> Intersection {
         let verts = unsafe { VERTICES.get().as_ref_unchecked() };
         let norms = unsafe { NORMALS.get().as_ref_unchecked() };
+        let uvs = unsafe { UVS.get().as_ref_unchecked() };
         let v0 = verts[self.pos[0]];
         let v1 = verts[self.pos[1]];
         let v2 = verts[self.pos[2]];
         let n0 = norms[self.nor[0]];
         let n1 = norms[self.nor[1]];
         let n2 = norms[self.nor[2]];
-
+        let uv0 = uvs[self.uv[0]];
+        let uv1 = uvs[self.uv[1]];
+        let uv2 = uvs[self.uv[2]];
         let ro: Vec3 = Vec3::new(ray.origin.x, ray.origin.y, ray.origin.z);
 
         let mut p0t: Vec3 = v0 - ro;
@@ -150,7 +154,7 @@ impl Tri {
 
         let mut point = b0 * v0 + b1 * v1 + b2 * v2;
 
-        let uv = b0 * Vec2::zero() + b1 * Vec2::y() + b2 * Vec2::one();
+        let uv = b0 * uv0 + b1 * uv1 + b2 * uv2;
 
         point += normal * 0.000001;
 

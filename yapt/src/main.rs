@@ -30,7 +30,7 @@ pub mod prelude {
         camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
         scene::Scene, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
         RenderSettings, Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
-        SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, VERTICES, WIDTH,
+        SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -57,6 +57,7 @@ const CHAINS: usize = 100;
 
 pub static VERTICES: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
 pub static NORMALS: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
+pub static UVS: SyncUnsafeCell<Vec<Vec2>> = SyncUnsafeCell::new(vec![]);
 pub static MATERIALS: SyncUnsafeCell<Vec<Mat>> = SyncUnsafeCell::new(vec![]);
 pub static TEXTURES: SyncUnsafeCell<Vec<Texture>> = SyncUnsafeCell::new(vec![]);
 pub static TRIANGLES: SyncUnsafeCell<Vec<Tri>> = SyncUnsafeCell::new(vec![]);
