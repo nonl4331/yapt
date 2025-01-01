@@ -153,7 +153,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                             let norm_offset = norms.len();
                             let uv_offset = uvs.len();
                             fn normalize_uv(uv: Vec2) -> Vec2 {
-                                Vec2::new(uv.x - uv.x.floor(), uv.y - uv.y.floor())
+                                Vec2::new(uv.x.rem_euclid(1.0), uv.y.rem_euclid(1.0))
                             }
 
                             let apply_transform = |v: Vec3| -> Vec3 {
