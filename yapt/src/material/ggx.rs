@@ -4,12 +4,12 @@ pub use crate::prelude::*;
 pub struct Ggx {
     a: f32,
     a_sq: f32,
-    ior: Vec3,
+    ior: usize,
 }
 
 impl Ggx {
     #[must_use]
-    pub fn new(a: f32, ior: Vec3) -> Self {
+    pub fn new(a: f32, ior: usize) -> Self {
         // don't allow a=0 due to floating point
         // large values of a also have slight
         // floating point issues such as a = 100
@@ -35,12 +35,12 @@ impl Ggx {
         coord.local_to_global(wi).normalised()
     }
     #[must_use]
-    pub fn eval(&self, wo: Vec3, wi: Vec3) -> Vec3 {
+    pub fn eval(&self, wo: Vec3, wi: Vec3, uv: Vec2) -> Vec3 {
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
         let g2 = self.g2_local(wo, wi, wm);
-        let f = self.f(wm.dot(wo));
+        let f = self.f(wm.dot(wo), uv);
         let g1 = self.g1_local(wo, wm);
         if g1 == 0.0 {
             return Vec3::ZERO;
@@ -48,9 +48,9 @@ impl Ggx {
         f * g2 / g1
     }
     #[must_use]
-    pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3) -> Vec3 {
+    pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, uv: Vec2) -> Vec3 {
         let wm = (wo + wi).normalised();
-        self.f(wm.dot(wo)) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
+        self.f(wm.dot(wo), uv) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
     }
     // local space (hemisphere on z=0 plane see section 2, definition)
     #[must_use]
@@ -134,7 +134,9 @@ impl Ggx {
     }
     // fresnel
     #[must_use]
-    fn f(&self, cos_theta: f32) -> Vec3 {
-        self.ior + (1.0 - self.ior) * (1.0 - cos_theta).powi(5)
+    fn f(&self, cos_theta: f32, uv: Vec2) -> Vec3 {
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        let ior = texs[self.ior].uv_value(uv);
+        ior + (1.0 - ior) * (1.0 - cos_theta).powi(5)
     }
 }

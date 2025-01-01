@@ -1,7 +1,7 @@
 use std::f32::consts::{FRAC_1_PI, TAU};
 
 use crate::coord::Coordinate;
-use crate::prelude::*;
+use crate::{prelude::*, TEXTURES};
 
 mod ggx;
 mod testing;
@@ -19,6 +19,7 @@ pub enum Mat {
 impl Mat {
     #[must_use]
     pub fn eval(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
+        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
         wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
@@ -26,9 +27,9 @@ impl Mat {
 
         match self {
             // cos pdf and weakening factor cancel out
-            Self::Matte(m) => m.albedo,
+            Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
             Self::Light(_) => unreachable!(),
-            Self::Glossy(m) => m.eval(wo, wi),
+            Self::Glossy(m) => m.eval(wo, wi, sect.uv),
             Self::Invisible => Vec3::ONE,
         }
     }
@@ -73,14 +74,17 @@ impl Mat {
     }
     #[must_use]
     pub fn bxdf_cos(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
+        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
         wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
         match self {
-            Self::Matte(m) => m.albedo * wi.dot(sect.nor).max(0.0) * FRAC_1_PI,
+            Self::Matte(m) => {
+                texs[m.albedo].uv_value(sect.uv) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
+            }
             Self::Light(_) | Self::Invisible => unreachable!(),
-            Self::Glossy(m) => m.bxdf_cos(wo, wi),
+            Self::Glossy(m) => m.bxdf_cos(wo, wi, sect.uv),
         }
     }
     fn requires_local_space(&self) -> bool {
@@ -97,7 +101,7 @@ impl Mat {
 
 #[derive(Debug, new)]
 pub struct Matte {
-    pub albedo: Vec3,
+    pub albedo: usize,
 }
 
 impl Matte {

@@ -37,27 +37,15 @@ pub unsafe fn setup_scene(render_settings: &RenderSettings) -> Cam {
     }
 }
 unsafe fn scene_one(render_settings: &RenderSettings) -> Cam {
-    loader::add_material("floor", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material("ball1", Mat::Matte(Matte::new(Vec3::new(0.5, 0.8, 0.8))));
-    loader::add_material("ball2", Mat::Matte(Matte::new(Vec3::new(0.8, 0.0, 0.0))));
-    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 3.0)));
-
-    let model_map = loader::create_model_map(vec![
-        ("floor", "floor"),
-        ("ball1", "ball1"),
-        ("light", "light"),
-        ("ball2", "ball2"),
-    ]);
-
-    loader::load_obj("res/one.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(0.0, -1.0, 1.0),
-        Vec3::new(0.0, 0.0, 1.0),
-        Vec3::Z,
-        70.0,
-        1.0,
+    loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
+    loader::load_gltf("res/one.glb", 1.0, Vec3::ZERO);
+    Cam::new_rot(
+        Vec3::new(4.9323, -2.1785, 2.6852),
+        Vec3::new(63.527, 0.000007, 66.17),
+        39.6,
         render_settings,
+        true,
     )
 }
 
@@ -66,106 +54,38 @@ unsafe fn scene_car(_render_settings: &RenderSettings) -> Cam {
 }
 
 unsafe fn scene_sphere(render_settings: &RenderSettings) -> Cam {
-    let test_mat = Mat::Glossy(Ggx::new(0.001, Vec3::ONE));
-    loader::add_material("default", test_mat);
-
-    let model_map = loader::create_model_map(vec![("default", "default")]);
-
-    loader::load_obj("res/sphere.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(0.0, -3.0, 0.0),
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::Z,
-        70.0,
-        1.0,
-        render_settings,
-    )
+    todo!();
 }
 
 unsafe fn scene_sphere_left_right(render_settings: &RenderSettings) -> Cam {
-    let test_mat = Mat::Glossy(Ggx::new(0.001, Vec3::ONE));
-    loader::add_material("test mat", test_mat);
-    loader::add_material("diffuse", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material(
-        "orange light",
-        Mat::Light(Light::new(Vec3::new(1.0, 0.65, 0.0))),
-    );
-    loader::add_material(
-        "blue light",
-        Mat::Light(Light::new(Vec3::new(0.68, 0.85, 0.9))),
-    );
-
-    let model_map = loader::create_model_map(vec![
-        ("floor", "diffuse"),
-        ("sphere", "test mat"),
-        ("right_light", "orange light"),
-        ("left_light", "blue light"),
-    ]);
-
-    loader::load_obj("res/sphere_left_right.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(0.0, -3.0, 2.0),
-        Vec3::new(0.0, 0.0, 2.0),
-        Vec3::Z,
-        70.0,
-        1.0,
-        render_settings,
-    )
+    todo!()
 }
 
 unsafe fn scene_furnace_test(render_settings: &RenderSettings) -> Cam {
-    loader::add_material("Inner", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE)));
-
-    let model_map = loader::create_model_map(vec![("Inner", "Inner"), ("Outer", "light")]);
-
-    loader::load_obj("res/furnace_test.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(-4.0, 0.0, 0.0),
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::Z,
-        70.0,
-        1.0,
-        render_settings,
-    )
+    todo!()
 }
 
 unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
-    loader::add_material("rest", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material("empty", Mat::Invisible);
-    loader::add_material("light", Mat::Light(Light::new(Vec3::ONE * 1.0)));
-
-    let model_map = loader::create_model_map(vec![
-        ("grey_and_white_room:lambert2SG_light", "empty"),
-        ("lambert3SG", "empty"),
-        ("grey_and_white_room:Glass", "empty"),
-        ("grey_and_white_room:lambert2SG_light", "empty"),
-        ("light", "light"),
-    ]);
-
-    loader::load_obj("res/room.obj", 1.0, Vec3::ZERO, &model_map);
-
-    Cam::new(
-        Vec3::new(3.0, -3.0, 1.8),
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::Z,
+    loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
+    loader::add_material(
+        vec!["light", "grey_and_white_room:lambert2SG_light"],
+        Mat::Light(Light::new(Vec3::ONE * 5.0)),
+    );
+    loader::load_gltf("res/room.glb", 1.0, Vec3::ZERO);
+    Cam::new_rot(
+        Vec3::new(1.9687, -4.5139, 1.7961),
+        Vec3::new(79.927, 0.0, 4.1697),
         70.0,
-        1.0,
         render_settings,
+        true,
     )
 }
 
 unsafe fn scene_sponza_ivy(render_settings: &RenderSettings) -> Cam {
-    loader::add_material("rest", Mat::Matte(Matte::new(Vec3::ONE * 0.5)));
-    loader::add_material(
-        "green",
-        Mat::Glossy(Ggx::new(0.95, Vec3::new(0.0, 1.0, 0.0))),
-    );
-    let model_map = loader::create_model_map(vec![("default", "rest"), ("IvyLeaf", "green")]);
-    loader::load_obj("res/sponza_ivy.obj", 1.0, Vec3::ZERO, &model_map);
+    loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
+    loader::load_gltf("res/sponza_ivy.glb", 1.0, Vec3::ZERO);
     Cam::new_rot(
         Vec3::new(6.8876, -0.082649, 10.742),
         Vec3::new(98.27, 0.0, 96.0),

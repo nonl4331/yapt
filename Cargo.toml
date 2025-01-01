@@ -5,3 +5,10 @@ members = [
 	"bvh",
 	"utility",
 ]
+
+[profile.release]
+debug = true
+debug-info = 2
+
+[profile.test]
+opt-level = 2

@@ -210,7 +210,10 @@ impl Vec3 {
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Vec3 { x, y, z }
     }
-
+    #[inline]
+    pub const fn splat(v: f32) -> Self {
+        Self::new(v, v, v)
+    }
     #[inline]
     pub const fn one() -> Self {
         Vec3::new(1.0, 1.0, 1.0)
@@ -345,6 +348,10 @@ impl Vec3 {
     pub fn is_finite(&self) -> bool {
         self.x.is_finite() || self.y.is_finite() || self.z.is_finite()
     }
+    #[inline]
+    pub fn hadamard(&self, other: Self) -> Self {
+        Self::new(self.x * other.x, self.y * other.y, self.z * other.z)
+    }
 }
 
 impl Vec2 {
@@ -427,6 +434,10 @@ impl Vec2 {
     #[inline]
     pub fn contains_nan(&self) -> bool {
         self.x.is_nan() || self.y.is_nan()
+    }
+    #[inline]
+    pub fn hadamard(&self, other: Self) -> Self {
+        Self::new(self.x * other.x, self.y * other.y)
     }
 }
 

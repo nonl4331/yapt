@@ -2,7 +2,9 @@
     get_mut_unchecked,
     sync_unsafe_cell,
     ptr_as_ref_unchecked,
-    once_cell_get_mut
+    once_cell_get_mut,
+    array_windows,
+    iter_map_windows
 )]
 pub const WIDTH: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
@@ -28,7 +30,7 @@ pub mod prelude {
         camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
         scene::Scene, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
         RenderSettings, Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
-        SAMPLABLE, TRIANGLES, VERTICES, WIDTH,
+        SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -56,10 +58,13 @@ const CHAINS: usize = 100;
 pub static VERTICES: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
 pub static NORMALS: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
 pub static MATERIALS: SyncUnsafeCell<Vec<Mat>> = SyncUnsafeCell::new(vec![]);
+pub static TEXTURES: SyncUnsafeCell<Vec<Texture>> = SyncUnsafeCell::new(vec![]);
 pub static TRIANGLES: SyncUnsafeCell<Vec<Tri>> = SyncUnsafeCell::new(vec![]);
 pub static SAMPLABLE: SyncUnsafeCell<Vec<usize>> = SyncUnsafeCell::new(vec![]);
 pub static BVH: SyncUnsafeCell<Bvh> = SyncUnsafeCell::new(Bvh { nodes: vec![] });
 pub static MATERIAL_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
+    Mutex::new(std::cell::OnceCell::new());
+pub static TEXTURE_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
     Mutex::new(std::cell::OnceCell::new());
 pub static ENVMAP: SyncUnsafeCell<EnvMap> = SyncUnsafeCell::new(EnvMap::DEFAULT);
 pub static CAM: SyncUnsafeCell<Cam> = SyncUnsafeCell::new(crate::camera::PLACEHOLDER);
@@ -238,8 +243,10 @@ fn main() {
 }
 
 #[derive(Parser, Clone)]
-#[command(about, long_about = None)]
+#[command(about, long_about = None, disable_help_flag = true)]
 pub struct RenderSettings {
+    #[arg(long, action = clap::ArgAction::HelpLong)]
+    pub help: Option<bool>,
     #[arg(short, default_value_t = false)]
     pub bvh_heatmap: bool,
     #[arg(short, long, default_value_t = crate::WIDTH)]
@@ -276,6 +283,7 @@ pub struct RenderSettings {
 impl Default for RenderSettings {
     fn default() -> Self {
         Self {
+            help: None,
             bvh_heatmap: false,
             width: crate::WIDTH,
             height: crate::HEIGHT,
