@@ -42,7 +42,12 @@ pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap
     unimplemented!();
 }
 
-pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
+pub unsafe fn load_gltf(
+    path: &str,
+    scale: f32,
+    offset: Vec3,
+    render_settings: &RenderSettings,
+) -> Vec<Cam> {
     let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
     let texs = unsafe { TEXTURES.get().as_mut_unchecked() };
     let tris = unsafe { TRIANGLES.get().as_mut_unchecked() };
@@ -54,7 +59,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
     let mut lock_tex = TEXTURE_NAMES.lock().unwrap();
     let tex_names = lock_tex.get_mut_or_init(HashMap::new);
 
-    let cams = Vec::new();
+    let mut cams = Vec::new();
     let (doc, bufs, _) = match gltf::import(path) {
         Ok(v) => v,
         Err(e) => {
@@ -91,11 +96,11 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
         }
     }
 
-    let mut node_queue_two = vec![NodeCollection::new(
+    let mut node_queue = vec![NodeCollection::new(
         scene.nodes().collect(),
-        Vec3::ZERO,
+        offset,
         Quaternion::new(1.0, 0.0, 0.0, 0.0),
-        Vec3::ONE,
+        Vec3::splat(scale),
     )];
 
     while let Some(NodeCollection {
@@ -103,7 +108,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
         translation,
         rotation,
         scale,
-    }) = node_queue_two.pop()
+    }) = node_queue.pop()
     {
         while let Some(node) = nodes.pop() {
             let (local_translation, local_rotation, local_scale) = node.transform().decomposed();
@@ -122,7 +127,24 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
 
             // load camera if it exists
             if let Some(cam) = node.camera() {
-                //let cam = Cam::new_quat(translation, rotation, 70.0, ());
+                if let gltf::camera::Projection::Perspective(perp) = cam.projection() {
+                    let hfov = (perp.yfov()
+                        * (render_settings.width.get() as f32
+                            / render_settings.height.get() as f32))
+                        .to_degrees();
+                    log::info!(
+                        "Loaded cam {} @ {} with fov {}",
+                        cams.len(),
+                        local_translation,
+                        hfov,
+                    );
+                    cams.push(Cam::new_quat(
+                        local_translation,
+                        local_rotation,
+                        hfov,
+                        render_settings,
+                    ));
+                }
             }
 
             // load mesh if it exists
@@ -152,9 +174,6 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                             let vert_offset = verts.len();
                             let norm_offset = norms.len();
                             let uv_offset = uvs.len();
-                            fn normalize_uv(uv: Vec2) -> Vec2 {
-                                Vec2::new(uv.x.rem_euclid(1.0), uv.y.rem_euclid(1.0))
-                            }
 
                             let apply_transform = |v: Vec3| -> Vec3 {
                                 let v = v.hadamard(local_scale);
@@ -183,7 +202,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
                                 .read_tex_coords(0)
                                 .unwrap()
                                 .into_f32()
-                                .map(|v| normalize_uv(v.into()))
+                                .map(|v| v.into())
                                 .collect();
 
                             verts.extend(new_verticies);
@@ -223,7 +242,7 @@ pub unsafe fn load_gltf(path: &str, scale: f32, offset: Vec3) -> Vec<Cam> {
             }
 
             let child_nodes: Vec<_> = node.children().collect();
-            node_queue_two.push(NodeCollection::new(
+            node_queue.push(NodeCollection::new(
                 child_nodes,
                 local_translation,
                 local_rotation,
