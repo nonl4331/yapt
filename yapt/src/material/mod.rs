@@ -37,14 +37,23 @@ impl Mat {
         match self {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => true,
-            Self::Glossy(m) => m.scatter(sect, ray, rng),
             Self::Invisible => {
                 ray.origin = sect.pos - sect.nor * 0.00001;
                 false
             }
+            Self::Glossy(m) => m.scatter(sect, ray, rng),
         }
     }
-    pub fn is_delta(&self) -> bool {
+    pub fn uv_intersect(&self, uv: Vec2, rng: &mut impl MinRng) -> bool {
+        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
+
+        match self {
+            Self::Invisible => false,
+            Self::Glossy(m) => texs[m.ior].does_intersect(uv, rng),
+            _ => true,
+        }
+    }
+    pub fn is_delta(&self, uv: Vec2) -> bool {
         match self {
             Self::Invisible => true,
             _ => false,

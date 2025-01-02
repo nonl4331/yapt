@@ -17,7 +17,7 @@ impl Naive {
         while depth < MAX_DEPTH {
             depth += 1;
 
-            let sect = get_intersection(&ray);
+            let sect = get_intersection(&ray, rng);
 
             if sect.is_none() {
                 rgb += tp * envmap.sample_dir(ray.dir);
@@ -74,7 +74,7 @@ impl NEEMIS {
         // ----
         // find first intersection (MIS + NEE doesn't apply to camera rays)
         // ----
-        let mut sect = get_intersection(&ray);
+        let mut sect = get_intersection(&ray, rng);
 
         if sect.is_none() {
             return (envmap.sample_dir(ray.dir), ray_count);
@@ -104,8 +104,8 @@ impl NEEMIS {
 
             // check for obstructions
             ray_count += 1;
-            let light_sect = intersect_idx(&light_ray, light_idx);
-            if !light_sect.is_none() && !mat.is_delta() {
+            let light_sect = intersect_idx(&light_ray, light_idx, rng);
+            if !light_sect.is_none() && !mat.is_delta(sect.uv) {
                 let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 
                 // add light contribution if path is reachable by bsdf
@@ -129,7 +129,7 @@ impl NEEMIS {
             tp *= mat.eval(&sect, wo, ray.dir);
 
             ray_count += 1;
-            let new_sect = get_intersection(&ray);
+            let new_sect = get_intersection(&ray, rng);
             if new_sect.is_none() {
                 rgb += tp * envmap.sample_dir(ray.dir);
                 break;
@@ -138,7 +138,7 @@ impl NEEMIS {
             let new_mat = &mats[new_sect.mat];
 
             // hit samplable calculate weight
-            if samplable.contains(&new_sect.id) && !mat.is_delta() {
+            if samplable.contains(&new_sect.id) && !mat.is_delta(sect.uv) {
                 let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
                 let bsdf_light_pdf = tris[new_sect.id].pdf(&new_sect, &ray) * inverse_samplable;
                 rgb += tp
@@ -177,13 +177,13 @@ impl NEEMIS {
     }
 }
 #[must_use]
-fn get_intersection(ray: &Ray) -> Intersection {
+fn get_intersection(ray: &Ray, rng: &mut impl MinRng) -> Intersection {
     let tris = unsafe { TRIANGLES.get().as_ref_unchecked() };
     let bvh = unsafe { BVH.get().as_ref_unchecked() };
     let mut sect = Intersection::NONE;
     for range in bvh.traverse(ray) {
         for i in range {
-            let mut tri_sect = tris[i].intersect(ray);
+            let mut tri_sect = tris[i].intersect(ray, rng);
             tri_sect.id = i;
             sect.min(tri_sect);
         }
@@ -191,10 +191,10 @@ fn get_intersection(ray: &Ray) -> Intersection {
     sect
 }
 #[must_use]
-pub fn intersect_idx(ray: &Ray, idx: usize) -> Intersection {
+pub fn intersect_idx(ray: &Ray, idx: usize, rng: &mut impl MinRng) -> Intersection {
     let tris = unsafe { TRIANGLES.get().as_ref_unchecked() };
     let bvh = unsafe { BVH.get().as_ref_unchecked() };
-    let sect = tris[idx].intersect(ray);
+    let sect = tris[idx].intersect(ray, rng);
     if sect.is_none() {
         return sect;
     }
@@ -204,7 +204,7 @@ pub fn intersect_idx(ray: &Ray, idx: usize) -> Intersection {
             if i == idx {
                 continue;
             }
-            let t = tris[i].intersect(ray).t;
+            let t = tris[i].intersect(ray, rng).t;
             if t > 0.0 && t < sect.t {
                 return Intersection::NONE;
             }

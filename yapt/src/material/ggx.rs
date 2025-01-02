@@ -4,7 +4,7 @@ pub use crate::prelude::*;
 pub struct Ggx {
     a: f32,
     a_sq: f32,
-    ior: usize,
+    pub ior: usize,
 }
 
 impl Ggx {

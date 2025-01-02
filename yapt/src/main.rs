@@ -9,6 +9,7 @@
 pub const WIDTH: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 const SAMPLES: u64 = 1000;
+pub const NO_TEXTURE: usize = usize::MAX;
 
 pub mod camera;
 pub mod coord;

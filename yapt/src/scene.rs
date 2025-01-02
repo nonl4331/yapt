@@ -95,7 +95,7 @@ unsafe fn scene_sponza(render_settings: &RenderSettings) -> Cam {
         Mat::Light(Light::new(Vec3::ONE * 5.0)),
     );
     let cams = loader::load_gltf("res/sponza.glb", 1.0, Vec3::ZERO, render_settings);
-    cams.into_iter().nth(1).unwrap_or_else(|| {
+    cams.into_iter().nth(0).unwrap_or_else(|| {
         Cam::new_quat(
             Vec3::new(5.280, 0.0, 0.962),
             Quaternion::new(0.386, 0.403, 0.600, 0.574),

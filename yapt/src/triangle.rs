@@ -50,10 +50,12 @@ impl Aabound for Tri {
 impl Tri {
     // see whoop 2013 https://jcgt.org/published/0002/01/05/paper.pdf
     #[must_use]
-    pub fn intersect(&self, ray: &Ray) -> Intersection {
+    pub fn intersect(&self, ray: &Ray, rng: &mut impl MinRng) -> Intersection {
         let verts = unsafe { VERTICES.get().as_ref_unchecked() };
         let norms = unsafe { NORMALS.get().as_ref_unchecked() };
+        let mats = unsafe { MATERIALS.get().as_ref_unchecked() };
         let uvs = unsafe { UVS.get().as_ref_unchecked() };
+
         let v0 = verts[self.pos[0]];
         let v1 = verts[self.pos[1]];
         let v2 = verts[self.pos[2]];
@@ -137,6 +139,12 @@ impl Tri {
         let b1 = e1 * inv_det;
         let b2 = e2 * inv_det;
 
+        let uv = b0 * uv0 + b1 * uv1 + b2 * uv2;
+
+        if !mats[self.mat].uv_intersect(uv, rng) {
+            return Intersection::NONE;
+        }
+
         let t = inv_det * t_scaled;
 
         let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
@@ -153,8 +161,6 @@ impl Tri {
         }
 
         let mut point = b0 * v0 + b1 * v1 + b2 * v2;
-
-        let uv = b0 * uv0 + b1 * uv1 + b2 * uv2;
 
         point += normal * 0.000001;
 

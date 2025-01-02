@@ -283,10 +283,11 @@ fn mat_to_mat(
                 let end = start + view.length();
                 let tex_data = &buff[start..end];
                 let image = image::load_from_memory(tex_data).unwrap();
-                let image = image.to_rgb32f();
+                let image = image.to_rgba32f();
                 let dim = image.dimensions();
                 let image = image.into_vec();
-                let tex = Texture::Image(Image::from_rgbf32(dim.0 as usize, dim.1 as usize, image));
+                let tex =
+                    Texture::Image(Image::from_rgbaf32(dim.0 as usize, dim.1 as usize, image));
                 let idx = texs.len();
                 texs.push(tex);
                 tex_names.insert(tex_name, idx);
