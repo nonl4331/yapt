@@ -92,7 +92,7 @@ unsafe fn scene_sponza(render_settings: &RenderSettings) -> Cam {
     loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
     loader::add_material(
         vec!["light", "Material.001"],
-        Mat::Light(Light::new(Vec3::ONE * 5.0)),
+        Mat::Light(Light::new(Vec3::ONE * 15.0)),
     );
     let cams = loader::load_gltf("res/sponza.glb", 1.0, Vec3::ZERO, render_settings);
     cams.into_iter().nth(0).unwrap_or_else(|| {

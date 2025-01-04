@@ -29,7 +29,7 @@ impl Mat {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
             Self::Light(_) => unreachable!(),
-            Self::Glossy(m) => m.eval(wo, wi, sect.uv),
+            Self::Glossy(m) => m.eval(wo, wi, sect),
             Self::Invisible => Vec3::ONE,
         }
     }
@@ -77,7 +77,7 @@ impl Mat {
         match self {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
-            Self::Glossy(m) => m.pdf(wo, wi),
+            Self::Glossy(m) => m.pdf(wo, wi, sect),
             Self::Invisible => unreachable!(),
         }
     }
@@ -93,7 +93,7 @@ impl Mat {
                 texs[m.albedo].uv_value(sect.uv) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
             }
             Self::Light(_) | Self::Invisible => unreachable!(),
-            Self::Glossy(m) => m.bxdf_cos(wo, wi, sect.uv),
+            Self::Glossy(m) => m.bxdf_cos(wo, wi, sect),
         }
     }
     fn requires_local_space(&self) -> bool {

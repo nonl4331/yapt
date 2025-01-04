@@ -2,68 +2,67 @@ pub use crate::prelude::*;
 
 #[derive(Debug)]
 pub struct Ggx {
-    a: f32,
-    a_sq: f32,
+    pub roughness: usize,
     pub ior: usize,
 }
 
 impl Ggx {
     #[must_use]
-    pub fn new(a: f32, ior: usize) -> Self {
-        // don't allow a=0 due to floating point
-        // large values of a also have slight
-        // floating point issues such as a = 100
-        let a = a.max(0.0001);
-        Self {
-            a,
-            a_sq: a.powi(2),
-            ior,
-        }
+    pub fn new(roughness: usize, ior: usize) -> Self {
+        Self { roughness, ior }
     }
     #[must_use]
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
         // by convention points away from surface hence the -ray.dir (section 2, definition)
-        *ray = Ray::new(sect.pos, self.sample(sect.nor, -ray.dir, rng));
+        *ray = Ray::new(sect.pos, self.sample(sect, -ray.dir, rng));
         false
     }
     #[must_use]
-    pub fn sample(&self, normal: Vec3, mut wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
-        let coord = crate::coord::Coordinate::new_from_z(normal);
+    pub fn sample(&self, sect: &Intersection, mut wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
+        let a = self.get_a(sect);
+
+        let coord = crate::coord::Coordinate::new_from_z(sect.nor);
         wo = coord.global_to_local(wo);
-        let wm = self.sample_vndf_local(wo, rng);
+        let wm = self.sample_vndf_local(a, wo, rng);
         let wi = wo.reflected(wm);
         coord.local_to_global(wi).normalised()
     }
     #[must_use]
-    pub fn eval(&self, wo: Vec3, wi: Vec3, uv: Vec2) -> Vec3 {
+    pub fn eval(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
+        let a = self.get_a(sect);
+        let a_sq = a.powi(2);
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
-        let g2 = self.g2_local(wo, wi, wm);
-        let f = self.f(wm.dot(wo), uv);
-        let g1 = self.g1_local(wo, wm);
+        let g2 = self.g2_local(a_sq, wo, wi, wm);
+        let f = self.f(wm.dot(wo), sect.uv);
+        let g1 = self.g1_local(a_sq, wo, wm);
         if g1 == 0.0 {
             return Vec3::ZERO;
         }
         f * g2 / g1
     }
     #[must_use]
-    pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, uv: Vec2) -> Vec3 {
+    pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        let a_sq = self.get_a(sect).powi(2);
+
         let wm = (wo + wi).normalised();
-        self.f(wm.dot(wo), uv) * self.ndf_local(wm) * self.g2_local(wo, wi, wm) / (4.0 * wo.z)
+        self.f(wm.dot(wo), sect.uv) * self.ndf_local(a_sq, wm) * self.g2_local(a_sq, wo, wi, wm)
+            / (4.0 * wo.z)
     }
     // local space (hemisphere on z=0 plane see section 2, definition)
     #[must_use]
-    pub fn sample_vndf_local(&self, in_w: Vec3, rng: &mut impl MinRng) -> Vec3 {
+    pub fn sample_vndf_local(&self, a: f32, in_w: Vec3, rng: &mut impl MinRng) -> Vec3 {
         // map episoid to unit hemisphere (section 2, importance sampling 1)
-        let in_w = Vec3::new(self.a * in_w.x, self.a * in_w.y, in_w.z).normalised();
+        let in_w = Vec3::new(a * in_w.x, a * in_w.y, in_w.z).normalised();
 
         // intersect unit hemisphere based on new in_w and record point (section 2, important
         // sampling 2)
         let p_hemi = Self::sample_vndf_hemisphere(in_w, rng);
 
         // transform intersection point back (section 2, importance sampling 3)
-        Vec3::new(p_hemi.x * self.a, p_hemi.y * self.a, p_hemi.z).normalised()
+        Vec3::new(p_hemi.x * a, p_hemi.y * a, p_hemi.z).normalised()
         // see pbrt v4 9.6.4 for why  * not /
     }
     // (section 3, listing 3)
@@ -78,55 +77,57 @@ impl Ggx {
     }
     // by convention points away from surface (section 2, definition)
     #[must_use]
-    pub fn pdf(&self, wo: Vec3, wi: Vec3) -> f32 {
+    pub fn pdf(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> f32 {
+        let a = self.get_a(sect);
+
         let mut wm = (wo + wi).normalised();
         if wm.z < 0.0 {
             wm = -wm;
         }
         // Heitz2018GGX (17)
-        self.vndf_local(wm, wo) / (4.0 * wo.dot(wm))
+        self.vndf_local(a.powi(2), wm, wo) / (4.0 * wo.dot(wm))
     }
     // visible normal distribution function
     // this is a valid PDF
     // wo is camera ray
     #[must_use]
-    pub fn vndf_local(&self, wm: Vec3, wo: Vec3) -> f32 {
+    pub fn vndf_local(&self, a_sq: f32, wm: Vec3, wo: Vec3) -> f32 {
         if wm.z < 0.0 {
             return 0.0;
         }
-        self.g1_local(wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(wm) / wo.z.abs()
+        self.g1_local(a_sq, wo, wm) * wo.dot(wm).max(0.0) * self.ndf_local(a_sq, wm) / wo.z.abs()
         // see pbrt v4
     }
     // normal distribution function
     #[must_use]
-    pub fn ndf_local(&self, wm: Vec3) -> f32 {
+    pub fn ndf_local(&self, a_sq: f32, wm: Vec3) -> f32 {
         if wm.z <= 0.0 {
             return 0.0;
         }
-        let tmp = wm.z.powi(2) * (self.a_sq - 1.0) + 1.0;
-        self.a_sq * FRAC_1_PI / tmp.powi(2)
+        let tmp = wm.z.powi(2) * (a_sq - 1.0) + 1.0;
+        a_sq * FRAC_1_PI / tmp.powi(2)
     }
     #[must_use]
-    fn lambda(&self, w: Vec3) -> f32 {
+    fn lambda(&self, a_sq: f32, w: Vec3) -> f32 {
         // Heitz2018 (2)
         // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
-        let lambda = self.a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
+        let lambda = a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
         // approx 1/100 billion change out < 0.0 due to floating point
         let out = 0.5 * ((1.0 + lambda).sqrt() - 1.0).max(0.0);
         out
     }
     #[must_use]
-    pub fn g1_local(&self, w: Vec3, wm: Vec3) -> f32 {
+    pub fn g1_local(&self, a_sq: f32, w: Vec3, wm: Vec3) -> f32 {
         if w.dot(wm) * wm.z <= 0.0 {
             return 0.0;
         }
-        let lambda = self.lambda(w);
+        let lambda = self.lambda(a_sq, w);
         1.0 / (1.0 + lambda)
     }
     // Height correlated G2 (Heitz2014Microfacet 99)
     #[must_use]
-    fn g2_local(&self, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
-        let mut out = 1.0 / (1.0 + self.lambda(wa) + self.lambda(wb));
+    fn g2_local(&self, a_sq: f32, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
+        let mut out = 1.0 / (1.0 + self.lambda(a_sq, wa) + self.lambda(a_sq, wb));
         if wa.dot(wm) * wa.z <= 0.0 || wb.dot(wm) * wb.z <= 0.0 {
             out = 0.0;
         }
@@ -138,5 +139,10 @@ impl Ggx {
         let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
         let ior = texs[self.ior].uv_value(uv);
         ior + (1.0 - ior) * (1.0 - cos_theta).powi(5)
+    }
+    #[must_use]
+    fn get_a(&self, sect: &Intersection) -> f32 {
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        texs[self.roughness].uv_value(sect.uv)[1].max(0.0001)
     }
 }

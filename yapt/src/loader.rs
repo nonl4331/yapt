@@ -260,6 +260,45 @@ pub unsafe fn load_gltf(
     cams
 }
 
+fn get_tex_idx(
+    bufs: &[gltf::buffer::Data],
+    tex_names: &mut HashMap<String, usize>,
+    texs: &mut Vec<Texture>,
+    info: Option<gltf::texture::Info>,
+    fallback: [f32; 4],
+    tex_name: String,
+) -> usize {
+    if let Some(idx) = tex_names.get(&tex_name) {
+        return *idx;
+    }
+
+    let idx = texs.len();
+
+    let tex = if let Some(info) = info {
+        let tex = info.texture();
+        let source = tex.source().source();
+        let gltf::image::Source::View { view, .. } = source else {
+            panic!()
+        };
+        let buff = &bufs[view.buffer().index()];
+
+        let start = view.offset();
+        let end = start + view.length();
+        let tex_data = &buff[start..end];
+        let image = image::load_from_memory(tex_data).unwrap();
+        let image = image.to_rgba32f();
+        let dim = image.dimensions();
+        let image = image.into_vec();
+        Texture::Image(Image::from_rgbaf32(dim.0 as usize, dim.1 as usize, image))
+    } else {
+        Texture::Solid(Vec3::new(fallback[0], fallback[1], fallback[2]))
+    };
+
+    texs.push(tex);
+    tex_names.insert(tex_name, idx);
+    idx
+}
+
 fn mat_to_mat(
     bufs: &[gltf::buffer::Data],
     gltf_mat: &gltf::Material,
@@ -268,49 +307,31 @@ fn mat_to_mat(
     tex_names: &mut HashMap<String, usize>,
 ) -> Option<Mat> {
     let roughness = gltf_mat.pbr_metallic_roughness();
-    match roughness.base_color_texture() {
-        Some(info) => {
-            let tex = info.texture();
-            let source = tex.source().source();
-            let gltf::image::Source::View { view, .. } = source else {
-                panic!()
-            };
-            let buff = &bufs[view.buffer().index()];
-            let tex_name = tex.name().map(|v| v.to_owned()).unwrap_or(mat_name);
 
-            let idx = if !tex_names.contains_key(&tex_name) {
-                let start = view.offset();
-                let end = start + view.length();
-                let tex_data = &buff[start..end];
-                let image = image::load_from_memory(tex_data).unwrap();
-                let image = image.to_rgba32f();
-                let dim = image.dimensions();
-                let image = image.into_vec();
-                let tex =
-                    Texture::Image(Image::from_rgbaf32(dim.0 as usize, dim.1 as usize, image));
-                let idx = texs.len();
-                texs.push(tex);
-                tex_names.insert(tex_name, idx);
-                idx
-            } else {
-                *tex_names.get(&tex_name).unwrap()
-            };
-            return Some(Mat::Glossy(Ggx::new(roughness.roughness_factor(), idx)));
-        }
-        None => {
-            let base_col = roughness.base_color_factor();
-            let tex_name = mat_name;
-            let idx = if !tex_names.contains_key(&tex_name) {
-                let tex = Texture::Solid(Vec3::new(base_col[0], base_col[1], base_col[2]));
-                let idx = texs.len();
-                texs.push(tex);
-                tex_names.insert(tex_name, idx);
-                idx
-            } else {
-                *tex_names.get(&tex_name).unwrap()
-            };
+    // get base col
+    let base_col_idx = get_tex_idx(
+        bufs,
+        tex_names,
+        texs,
+        roughness.base_color_texture(),
+        roughness.base_color_factor(),
+        format!("{mat_name}_base_colour"),
+    );
 
-            return Some(Mat::Glossy(Ggx::new(roughness.roughness_factor(), idx)));
-        }
-    }
+    // get roughnes
+    let metallic_roughness_idx = get_tex_idx(
+        bufs,
+        tex_names,
+        texs,
+        roughness.metallic_roughness_texture(),
+        [
+            0.0,
+            roughness.roughness_factor(),
+            roughness.metallic_factor(),
+            1.0,
+        ],
+        format!("{mat_name}_base_roughness"),
+    );
+
+    Some(Mat::Glossy(Ggx::new(metallic_roughness_idx, base_col_idx)))
 }
