@@ -71,11 +71,6 @@ pub static TEXTURE_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
 pub static ENVMAP: SyncUnsafeCell<EnvMap> = SyncUnsafeCell::new(EnvMap::DEFAULT);
 pub static CAM: SyncUnsafeCell<Cam> = SyncUnsafeCell::new(crate::camera::PLACEHOLDER);
 
-const MAGIC_VALUE_ONE: f32 = 543543521.0;
-const MAGIC_VALUE_ONE_VEC: Vec3 = Vec3::new(MAGIC_VALUE_ONE, MAGIC_VALUE_ONE, MAGIC_VALUE_ONE);
-const MAGIC_VALUE_TWO: f32 = 5435421.5;
-const MAGIC_VALUE_TWO_VEC: Vec3 = Vec3::new(MAGIC_VALUE_TWO, MAGIC_VALUE_TWO, MAGIC_VALUE_TWO);
-
 #[derive(clap::ValueEnum, Copy, Clone, Default)]
 pub enum IntegratorType {
     Naive,

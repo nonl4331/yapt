@@ -44,7 +44,6 @@ impl Ggx {
     }
     #[must_use]
     pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
         let a_sq = self.get_a(sect).powi(2);
 
         let wm = (wo + wi).normalised();
@@ -134,6 +133,8 @@ impl Ggx {
         out
     }
     // fresnel
+    // due to RGB rendering use shlick's approximation
+    // https://diglib.eg.org/server/api/core/bitstreams/726dc384-d7dd-4c0e-8806-eadec0ff3886/content
     #[must_use]
     fn f(&self, cos_theta: f32, uv: Vec2) -> Vec3 {
         let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };

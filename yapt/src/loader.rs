@@ -14,13 +14,14 @@ pub unsafe fn add_material<A: Into<String>>(names: Vec<A>, material: Mat) {
         mat_names.insert(name.into(), index);
     }
 }
-pub unsafe fn add_texture<T: Into<String>>(name: T, texture: Texture) {
+pub unsafe fn add_texture<T: Into<String>>(name: T, texture: Texture) -> usize {
     let mut lock = TEXTURE_NAMES.lock().unwrap();
     let tex_names = lock.get_mut_or_init(HashMap::new);
     let texs = unsafe { TEXTURES.get().as_mut_unchecked() };
     let index = texs.len();
     texs.push(texture);
     tex_names.insert(name.into(), index);
+    index
 }
 
 pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, String> {
@@ -36,10 +37,6 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
         hashmap.insert(key, value);
     }
     hashmap
-}
-
-pub unsafe fn load_obj(path: &str, scale: f32, offset: Vec3, model_map: &HashMap<String, String>) {
-    unimplemented!();
 }
 
 pub unsafe fn load_gltf(
@@ -199,12 +196,13 @@ pub unsafe fn load_gltf(
                                 .map(apply_transform)
                                 .collect();
 
-                            let new_uvs: Vec<Vec2> = reader
-                                .read_tex_coords(0)
-                                .unwrap()
-                                .into_f32()
-                                .map(|v| v.into())
-                                .collect();
+                            let new_uvs: Vec<Vec2> = if let Some(coords) =
+                                reader.read_tex_coords(0).map(|v| v.into_f32())
+                            {
+                                coords.map(|v| v.into()).collect()
+                            } else {
+                                vec![Vec2::ZERO; new_verticies.len()]
+                            };
 
                             verts.extend(new_verticies);
                             norms.extend(new_normals);

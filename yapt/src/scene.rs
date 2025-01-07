@@ -16,6 +16,7 @@ pub unsafe fn setup_scene(render_settings: &RenderSettings) -> Cam {
         "room" | "r" => scene_room(render_settings),
         "sponza" | "s" => scene_sponza(render_settings),
         "sponza_ivy" | "sponza-ivy" | "sponzaivy" | "si" => scene_sponza_ivy(render_settings),
+        "mitsuba_knob" | "mk" | "mitsuba-knob" => scene_mitsuba_knob(render_settings),
         _ => scene_custom(
             &render_settings.scene,
             render_settings.camera_idx,
@@ -53,23 +54,6 @@ unsafe fn scene_furnace_test(render_settings: &RenderSettings) -> Cam {
     todo!()
 }
 
-unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
-    loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
-    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
-    loader::add_material(
-        vec!["light", "grey_and_white_room:lambert2SG_light"],
-        Mat::Light(Light::new(Vec3::ONE * 5.0)),
-    );
-    loader::load_gltf("res/room.glb", 1.0, Vec3::ZERO, render_settings);
-    Cam::new_rot(
-        Vec3::new(1.9687, -4.5139, 1.7961),
-        Vec3::new(79.927, 0.0, 4.1697),
-        70.0,
-        render_settings,
-        true,
-    )
-}
-
 unsafe fn scene_sponza(render_settings: &RenderSettings) -> Cam {
     loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
     loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
@@ -101,6 +85,26 @@ unsafe fn scene_sponza_ivy(render_settings: &RenderSettings) -> Cam {
             true,
         )
     })
+}
+
+unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
+    loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
+    loader::add_material(
+        vec!["Emitter-mid-window", "Emitter-Rear"],
+        Mat::Light(Light::new(Vec3::ONE * 5.0)),
+    );
+    let cams = loader::load_gltf("res/room.glb", 1.0, Vec3::ZERO, render_settings);
+    cams.into_iter().nth(0).unwrap()
+}
+
+unsafe fn scene_mitsuba_knob(render_settings: &RenderSettings) -> Cam {
+    let tex = loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    let roughness = loader::add_texture("", Texture::Solid(Vec3::splat(0.1)));
+    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
+    loader::add_material(vec!["case"], Mat::Glossy(Ggx::new(roughness, tex)));
+    let cams = loader::load_gltf("res/mitsuba_knob.glb", 1.0, Vec3::ZERO, render_settings);
+    cams.into_iter().nth(0).unwrap()
 }
 
 unsafe fn scene_custom(

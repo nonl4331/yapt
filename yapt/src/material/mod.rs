@@ -53,7 +53,7 @@ impl Mat {
             _ => true,
         }
     }
-    pub fn is_delta(&self, uv: Vec2) -> bool {
+    pub fn is_delta(&self) -> bool {
         match self {
             Self::Invisible => true,
             _ => false,

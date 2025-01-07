@@ -105,7 +105,7 @@ impl NEEMIS {
             // check for obstructions
             ray_count += 1;
             let light_sect = intersect_idx(&light_ray, light_idx, rng);
-            if !light_sect.is_none() && !mat.is_delta(sect.uv) {
+            if !light_sect.is_none() && !mat.is_delta() {
                 let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 
                 // add light contribution if path is reachable by bsdf
@@ -138,7 +138,7 @@ impl NEEMIS {
             let new_mat = &mats[new_sect.mat];
 
             // hit samplable calculate weight
-            if samplable.contains(&new_sect.id) && !mat.is_delta(sect.uv) {
+            if samplable.contains(&new_sect.id) && !mat.is_delta() {
                 let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
                 let bsdf_light_pdf = tris[new_sect.id].pdf(&new_sect, &ray) * inverse_samplable;
                 rgb += tp
