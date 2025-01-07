@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gltf::Node;
+use gltf::{material::AlphaMode, Node};
 
 use crate::prelude::*;
 
@@ -133,10 +133,11 @@ pub unsafe fn load_gltf(
                             / render_settings.height.get() as f32))
                         .to_degrees();
                     log::info!(
-                        "Loaded cam {} @ {} with fov {}",
+                        "Loaded cam {} @ {} with fov {}deg & quat {:?}",
                         cams.len(),
                         local_translation,
                         hfov,
+                        local_rotation,
                     );
                     cams.push(Cam::new_quat(
                         local_translation,
@@ -267,6 +268,8 @@ fn get_tex_idx(
     info: Option<gltf::texture::Info>,
     fallback: [f32; 4],
     tex_name: String,
+    alpha_mode: AlphaMode,
+    alpha_cuttof: f32,
 ) -> usize {
     if let Some(idx) = tex_names.get(&tex_name) {
         return *idx;
@@ -289,7 +292,13 @@ fn get_tex_idx(
         let image = image.to_rgba32f();
         let dim = image.dimensions();
         let image = image.into_vec();
-        Texture::Image(Image::from_rgbaf32(dim.0 as usize, dim.1 as usize, image))
+        Texture::Image(Image::from_rgbaf32(
+            dim.0 as usize,
+            dim.1 as usize,
+            image,
+            alpha_mode,
+            alpha_cuttof,
+        ))
     } else {
         Texture::Solid(Vec3::new(fallback[0], fallback[1], fallback[2]))
     };
@@ -316,6 +325,8 @@ fn mat_to_mat(
         roughness.base_color_texture(),
         roughness.base_color_factor(),
         format!("{mat_name}_base_colour"),
+        gltf_mat.alpha_mode(),
+        gltf_mat.alpha_cutoff().unwrap_or(0.5),
     );
 
     // get roughnes
@@ -331,6 +342,8 @@ fn mat_to_mat(
             1.0,
         ],
         format!("{mat_name}_base_roughness"),
+        gltf_mat.alpha_mode(),
+        gltf_mat.alpha_cutoff().unwrap_or(0.5),
     );
 
     Some(Mat::Glossy(Ggx::new(metallic_roughness_idx, base_col_idx)))

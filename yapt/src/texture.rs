@@ -1,3 +1,5 @@
+use gltf::material::AlphaMode;
+
 use crate::prelude::*;
 
 #[derive(Debug)]
@@ -14,8 +16,27 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn from_rgbaf32(width: usize, height: usize, data: Vec<f32>) -> Self {
+    pub fn from_rgbaf32(
+        width: usize,
+        height: usize,
+        mut data: Vec<f32>,
+        alpha_mode: AlphaMode,
+        alpha_cuttoff: f32,
+    ) -> Self {
         assert!(width * height * 4 == data.len());
+        for e in data.iter_mut().skip(3).step_by(4) {
+            *e = match alpha_mode {
+                AlphaMode::Opaque => 1.0,
+                AlphaMode::Mask => {
+                    if *e > alpha_cuttoff {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                AlphaMode::Blend => *e,
+            };
+        }
         Self {
             width,
             height,
@@ -47,7 +68,7 @@ impl Texture {
                 let y = ((img.height - 1) as f32 * v) as usize;
                 img.backing[x + img.width * y][3] >= rng.gen()
             }
-            Self::Solid(_v) => false,
+            Self::Solid(_v) => true,
         }
     }
 }

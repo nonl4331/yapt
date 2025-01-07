@@ -112,7 +112,7 @@ unsafe fn scene_custom(
         camera_idx = 0;
     }
     cams.into_iter().nth(camera_idx).unwrap_or_else(|| {
-        log::warn!("{filepath} does not contain a camera, using fallback!");
+        log::warn!("{filepath} does not contain any cameras, using fallback!");
         Cam::new_rot(
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
