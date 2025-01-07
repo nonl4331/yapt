@@ -29,9 +29,9 @@ pub mod work_handler;
 pub mod prelude {
     pub use crate::{
         camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
-        scene::Scene, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
-        RenderSettings, Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS,
-        SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
+        texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings,
+        Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES,
+        TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -261,8 +261,8 @@ pub struct RenderSettings {
     pub filename: String,
     #[arg(short, long, default_value_t = IntegratorType::default())]
     pub integrator: IntegratorType,
-    #[arg(short, long, default_value_t = Scene::default())]
-    pub scene: Scene,
+    #[arg(short, long, default_value_t = String::new())]
+    pub scene: String,
     #[arg(short, default_value_t = false)]
     pub pssmlt: bool,
     #[arg(short, long)]
@@ -292,7 +292,7 @@ impl Default for RenderSettings {
             samples: crate::SAMPLES,
             filename: String::new(),
             integrator: IntegratorType::default(),
-            scene: Scene::default(),
+            scene: String::default(),
             pssmlt: false,
             environment_map: None,
             u_low: 0.0,
