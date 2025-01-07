@@ -16,7 +16,11 @@ pub unsafe fn setup_scene(render_settings: &RenderSettings) -> Cam {
         "room" | "r" => scene_room(render_settings),
         "sponza" | "s" => scene_sponza(render_settings),
         "sponza_ivy" | "sponza-ivy" | "sponzaivy" | "si" => scene_sponza_ivy(render_settings),
-        _ => scene_custom(&render_settings.scene, 0, render_settings),
+        _ => scene_custom(
+            &render_settings.scene,
+            render_settings.camera_idx,
+            render_settings,
+        ),
     }
 }
 

@@ -280,6 +280,8 @@ pub struct RenderSettings {
     #[cfg(feature = "gui")]
     #[arg(long)]
     pub headless: bool,
+    #[arg(short, long, default_value_t = 0)]
+    camera_idx: usize,
 }
 
 impl Default for RenderSettings {
@@ -302,6 +304,7 @@ impl Default for RenderSettings {
             num_threads: None,
             #[cfg(feature = "gui")]
             headless: false,
+            camera_idx: 0,
         }
     }
 }
