@@ -99,7 +99,7 @@ impl fmt::Display for IntegratorType {
     }
 }
 
-#[derive(Debug, new)]
+#[derive(Debug, new, Clone)]
 pub struct Intersection {
     pub t: f32,
     pub uv: Vec2,

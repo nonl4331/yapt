@@ -327,7 +327,7 @@ fn mat_to_mat(
         gltf_mat.alpha_cutoff().unwrap_or(0.5),
     );
 
-    // get roughnes
+    // get roughness
     let metallic_roughness_idx = get_tex_idx(
         bufs,
         tex_names,
@@ -343,6 +343,17 @@ fn mat_to_mat(
         gltf_mat.alpha_mode(),
         gltf_mat.alpha_cutoff().unwrap_or(0.5),
     );
+
+    // lambertian at roughness = 1.0
+    match &texs[metallic_roughness_idx] {
+        Texture::Solid(v) if v.y == 1.0 => {
+            return Some(Mat::Matte(Matte::new(base_col_idx)));
+        }
+        Texture::Image(img) if img.backing.iter().all(|v| v[1] == 1.0) => {
+            return Some(Mat::Matte(Matte::new(base_col_idx)));
+        }
+        _ => {}
+    }
 
     Some(Mat::Glossy(Ggx::new(metallic_roughness_idx, base_col_idx)))
 }

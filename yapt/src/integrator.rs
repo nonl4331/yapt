@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 const MAX_DEPTH: u64 = 50;
-const RUSSIAN_ROULETTE_THRESHOLD: u64 = 3;
+const RUSSIAN_ROULETTE_THRESHOLD: u64 = 15;
 
 pub struct Naive {}
 

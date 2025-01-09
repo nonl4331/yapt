@@ -4,15 +4,18 @@ use crate::coord::Coordinate;
 use crate::{prelude::*, TEXTURES};
 
 mod ggx;
+mod refractive;
 mod testing;
 
 pub use ggx::Ggx;
+pub use refractive::Refractive;
 
 #[derive(Debug, new)]
 pub enum Mat {
     Matte(Matte),
     Light(Light),
     Glossy(Ggx),
+    Refractive(Refractive),
     Invisible,
 }
 
@@ -30,7 +33,7 @@ impl Mat {
             Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
             Self::Light(_) => unreachable!(),
             Self::Glossy(m) => m.eval(wo, wi, sect),
-            Self::Invisible => Vec3::ONE,
+            Self::Invisible | Self::Refractive(_) => Vec3::ONE,
         }
     }
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
@@ -42,6 +45,7 @@ impl Mat {
                 false
             }
             Self::Glossy(m) => m.scatter(sect, ray, rng),
+            Self::Refractive(m) => m.scatter(sect, ray, rng),
         }
     }
     pub fn uv_intersect(&self, uv: Vec2, rng: &mut impl MinRng) -> bool {
@@ -55,14 +59,14 @@ impl Mat {
     }
     pub fn is_delta(&self) -> bool {
         match self {
-            Self::Invisible => true,
+            Self::Invisible | Self::Refractive(_) => true,
             _ => false,
         }
     }
     #[must_use]
     pub fn le(&self, _pos: Vec3, _wo: Vec3) -> Vec3 {
         match self {
-            Self::Matte(_) | Self::Glossy(_) | Self::Invisible => Vec3::ZERO,
+            Self::Matte(_) | Self::Glossy(_) | Self::Refractive(_) | Self::Invisible => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
         }
     }
@@ -78,27 +82,26 @@ impl Mat {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
             Self::Glossy(m) => m.pdf(wo, wi, sect),
-            Self::Invisible => unreachable!(),
+            Self::Invisible | Self::Refractive(_) => unreachable!(),
         }
     }
     #[must_use]
     pub fn bxdf_cos(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
-        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
         wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
         match self {
-            Self::Matte(m) => {
-                texs[m.albedo].uv_value(sect.uv) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
+            Self::Matte(m) => m.bxdf_cos(sect, wo, wi),
+            Self::Light(_) | Self::Invisible | Self::Refractive(_) => {
+                unreachable!()
             }
-            Self::Light(_) | Self::Invisible => unreachable!(),
             Self::Glossy(m) => m.bxdf_cos(wo, wi, sect),
         }
     }
     fn requires_local_space(&self) -> bool {
         match self {
-            Self::Matte(_) | Self::Light(_) | Self::Invisible => false,
+            Self::Matte(_) | Self::Light(_) | Self::Invisible | Self::Refractive(_) => false,
             Self::Glossy(_) => true,
         }
     }
@@ -133,6 +136,15 @@ impl Matte {
     #[must_use]
     pub fn pdf(outgoing: Vec3, normal: Vec3) -> f32 {
         outgoing.dot(normal).max(0.0) * FRAC_1_PI
+    }
+    #[must_use]
+    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+        self.albedo(sect.uv) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
+    }
+    #[must_use]
+    pub fn albedo(&self, uv: Vec2) -> Vec3 {
+        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
+        texs[self.albedo].uv_value(uv)
     }
 }
 

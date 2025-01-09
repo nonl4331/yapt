@@ -10,7 +10,7 @@ pub enum Texture {
 
 #[derive(Debug)]
 pub struct Image {
-    backing: Vec<[f32; 4]>,
+    pub backing: Vec<[f32; 4]>,
     width: usize,
     height: usize,
 }

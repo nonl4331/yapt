@@ -42,10 +42,6 @@ unsafe fn scene_car(_render_settings: &RenderSettings) -> Cam {
     unimplemented!();
 }
 
-unsafe fn scene_sphere(render_settings: &RenderSettings) -> Cam {
-    todo!();
-}
-
 unsafe fn scene_sphere_left_right(render_settings: &RenderSettings) -> Cam {
     todo!()
 }
@@ -99,11 +95,18 @@ unsafe fn scene_room(render_settings: &RenderSettings) -> Cam {
 }
 
 unsafe fn scene_mitsuba_knob(render_settings: &RenderSettings) -> Cam {
-    let tex = loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
-    let roughness = loader::add_texture("", Texture::Solid(Vec3::splat(0.1)));
-    loader::add_material(vec!["rest"], Mat::Matte(Matte::new(0)));
-    loader::add_material(vec!["case"], Mat::Glossy(Ggx::new(roughness, tex)));
+    let _tex = loader::add_texture("__default", Texture::Solid(Vec3::splat(0.5)));
+    let _tex = loader::add_texture("backdrop_base_roughness", Texture::Solid(Vec3::ONE));
+
+    loader::add_material(vec!["case"], Mat::Refractive(Refractive::new(1.33)));
+
     let cams = loader::load_gltf("res/mitsuba_knob.glb", 1.0, Vec3::ZERO, render_settings);
+    cams.into_iter().nth(0).unwrap()
+}
+
+unsafe fn scene_sphere(render_settings: &RenderSettings) -> Cam {
+    loader::add_material(vec!["sphere"], Mat::Refractive(Refractive::new(1.33)));
+    let cams = loader::load_gltf("res/sphere.glb", 1.0, Vec3::ZERO, render_settings);
     cams.into_iter().nth(0).unwrap()
 }
 
