@@ -145,9 +145,31 @@ impl eframe::App for App {
         // -----------------------------------------------
         // Draw GUI
         // -----------------------------------------------
+        let spp = self.splats_done as f64 / (u32::from(rs.width) * u32::from(rs.height)) as f64;
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| ui.button("Export Camera"));
+                ui.menu_button("File", |ui| {
+                    let _ = ui.button("Export Camera");
+
+                    if ui.button("Save").clicked() {
+                        let mult = ((u32::from(rs.width) * u32::from(rs.height)) as f64
+                            / self.splats_done as f64) as f32;
+                        image::save_buffer(
+                            format!("{spp:.0}_{}", rs.filename),
+                            &self
+                                .canvas
+                                .iter()
+                                .map(|v| [v.x, v.y, v.z])
+                                .flatten()
+                                .map(|v| ((v * mult).powf(1.0 / 2.2) * 255.0) as u8)
+                                .collect::<Vec<_>>(),
+                            rs.width.into(),
+                            rs.height.into(),
+                            image::ColorType::Rgb8,
+                        )
+                        .unwrap();
+                    }
+                });
                 if ui.button("Add 100 samples").clicked() {
                     if rs.samples == 0 {
                         self.work_start = std::time::Instant::now();
@@ -161,7 +183,7 @@ impl eframe::App for App {
                     self.display_settings = true;
                 }
                 ui.label(format!(
-                    "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1}",
+                    "Mrays: {:.2} - Rays shot: {} - elapsed: {:.1} - samples per pixel: {spp:.1}",
                     (self.work_rays as f64 / self.work_duration.as_secs_f64()) / 1000000 as f64,
                     self.work_rays,
                     self.work_duration.as_secs_f64(),
