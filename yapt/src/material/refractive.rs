@@ -10,7 +10,12 @@ impl Refractive {
     pub fn new(ior: f32) -> Self {
         Self { ior }
     }
-    pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
+    pub fn scatter(
+        &self,
+        sect: &Intersection,
+        ray: &mut Ray,
+        rng: &mut impl MinRng,
+    ) -> ScatterStatus {
         let eta = if sect.out { 1.0 / self.ior } else { self.ior };
         let wo = -ray.dir;
 
@@ -36,6 +41,6 @@ impl Refractive {
             origin = sect.pos - 0.00001 * sect.nor;
         }
         *ray = Ray::new(origin, wi);
-        false
+        ScatterStatus::DIRAC_DELTA
     }
 }

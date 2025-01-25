@@ -1,4 +1,5 @@
 use std::f32::consts::{FRAC_1_PI, TAU};
+use std::ops::{BitAnd, BitOr};
 
 use crate::coord::Coordinate;
 use crate::{prelude::*, TEXTURES};
@@ -9,6 +10,56 @@ mod testing;
 
 pub use ggx::Ggx;
 pub use refractive::Refractive;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScatterStatus(u8);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaterialProperties(u8);
+
+impl ScatterStatus {
+    pub const NORMAL: Self = Self(0);
+    pub const EXIT: Self = Self(1);
+    pub const DIRAC_DELTA: Self = Self(1 << 1);
+    pub fn contains(&self, other: Self) -> bool {
+        (*self | other) == *self
+    }
+}
+
+impl BitAnd for ScatterStatus {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+impl BitOr for ScatterStatus {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl MaterialProperties {
+    pub const NORMAL: Self = Self(0);
+    pub const LIGHT: Self = Self(1);
+    pub const DIRAC_DELTA: Self = Self(1 << 1);
+    pub fn contains(&self, other: Self) -> bool {
+        (*self | other) == *self
+    }
+}
+
+impl BitAnd for MaterialProperties {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+impl BitOr for MaterialProperties {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
 
 #[derive(Debug, new)]
 pub enum Mat {
@@ -36,16 +87,28 @@ impl Mat {
             Self::Invisible | Self::Refractive(_) => Vec3::ONE,
         }
     }
-    pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
+    pub fn scatter(
+        &self,
+        sect: &Intersection,
+        ray: &mut Ray,
+        rng: &mut impl MinRng,
+    ) -> ScatterStatus {
         match self {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
-            Self::Light(_) => true,
+            Self::Light(_) => ScatterStatus::EXIT,
             Self::Invisible => {
                 ray.origin = sect.pos - sect.nor * 0.00001;
-                false
+                ScatterStatus::DIRAC_DELTA
             }
             Self::Glossy(m) => m.scatter(sect, ray, rng),
             Self::Refractive(m) => m.scatter(sect, ray, rng),
+        }
+    }
+    pub fn properties(&self) -> MaterialProperties {
+        match self {
+            Self::Refractive(_) | Self::Invisible => MaterialProperties::DIRAC_DELTA,
+            Self::Light(_) => MaterialProperties::LIGHT,
+            _ => MaterialProperties::NORMAL,
         }
     }
     pub fn uv_intersect(&self, uv: Vec2, rng: &mut impl MinRng) -> bool {
@@ -55,12 +118,6 @@ impl Mat {
             Self::Invisible => false,
             Self::Glossy(m) => texs[m.ior].does_intersect(uv, rng),
             _ => true,
-        }
-    }
-    pub fn is_delta(&self) -> bool {
-        match self {
-            Self::Invisible | Self::Refractive(_) => true,
-            _ => false,
         }
     }
     #[must_use]
@@ -117,10 +174,10 @@ pub struct Matte {
 }
 
 impl Matte {
-    pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl MinRng) -> bool {
+    pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl MinRng) -> ScatterStatus {
         let dir = Self::sample(sect.nor, rng);
         *ray = Ray::new(sect.pos, dir.normalised());
-        false
+        ScatterStatus::NORMAL
     }
     #[must_use]
     fn sample_local(rng: &mut impl MinRng) -> Vec3 {

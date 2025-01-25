@@ -30,7 +30,10 @@ impl Naive {
 
             rgb += mat.le(sect.pos, ray.dir) * tp;
 
-            if mat.scatter(&sect, &mut ray, rng) {
+            if mat
+                .scatter(&sect, &mut ray, rng)
+                .contains(ScatterStatus::EXIT)
+            {
                 break;
             }
 
@@ -105,7 +108,8 @@ impl NEEMIS {
             // check for obstructions
             ray_count += 1;
             let light_sect = intersect_idx(&light_ray, light_idx, rng);
-            if !light_sect.is_none() && !mat.is_delta() {
+            if !light_sect.is_none() && !mat.properties().contains(MaterialProperties::DIRAC_DELTA)
+            {
                 let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 
                 // add light contribution if path is reachable by bsdf
@@ -122,7 +126,9 @@ impl NEEMIS {
             // ----
             // BSDF sampling
             // ----
-            if mat.scatter(&sect, &mut ray, rng) {
+            let status = mat.scatter(&sect, &mut ray, rng);
+
+            if status.contains(ScatterStatus::EXIT) {
                 unreachable!()
             }
 
@@ -138,7 +144,7 @@ impl NEEMIS {
             let new_mat = &mats[new_sect.mat];
 
             // hit samplable calculate weight
-            if samplable.contains(&new_sect.id) && !mat.is_delta() {
+            if samplable.contains(&new_sect.id) && !status.contains(ScatterStatus::DIRAC_DELTA) {
                 let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
                 let bsdf_light_pdf = tris[new_sect.id].pdf(&new_sect, &ray) * inverse_samplable;
                 rgb += tp

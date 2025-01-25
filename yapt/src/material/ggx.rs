@@ -12,10 +12,15 @@ impl Ggx {
         Self { roughness, ior }
     }
     #[must_use]
-    pub fn scatter(&self, sect: &Intersection, ray: &mut Ray, rng: &mut impl MinRng) -> bool {
+    pub fn scatter(
+        &self,
+        sect: &Intersection,
+        ray: &mut Ray,
+        rng: &mut impl MinRng,
+    ) -> ScatterStatus {
         // by convention points away from surface hence the -ray.dir (section 2, definition)
         *ray = Ray::new(sect.pos, self.sample(sect, -ray.dir, rng));
-        false
+        ScatterStatus::NORMAL
     }
     #[must_use]
     pub fn sample(&self, sect: &Intersection, mut wo: Vec3, rng: &mut impl MinRng) -> Vec3 {
