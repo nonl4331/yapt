@@ -42,11 +42,11 @@ unsafe fn scene_car(_render_settings: &RenderSettings) -> Cam {
     unimplemented!();
 }
 
-unsafe fn scene_sphere_left_right(render_settings: &RenderSettings) -> Cam {
+unsafe fn scene_sphere_left_right(_: &RenderSettings) -> Cam {
     todo!()
 }
 
-unsafe fn scene_furnace_test(render_settings: &RenderSettings) -> Cam {
+unsafe fn scene_furnace_test(_: &RenderSettings) -> Cam {
     todo!()
 }
 

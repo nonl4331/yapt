@@ -109,7 +109,10 @@ impl NEEMIS {
             // check for obstructions
             ray_count += 1;
             let light_sect = intersect_idx(&light_ray, light_idx, rng);
-            if !light_sect.is_none() && !mat.properties().contains(MaterialProperties::DIRAC_DELTA)
+            if !light_sect.is_none()
+                && !mat
+                    .properties()
+                    .contains(MaterialProperties::ONLY_DIRAC_DELTA)
             {
                 let light_pdf = light.pdf(&light_sect, &light_ray) * inverse_samplable;
 

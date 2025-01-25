@@ -41,8 +41,7 @@ impl BitOr for ScatterStatus {
 
 impl MaterialProperties {
     pub const NORMAL: Self = Self(0);
-    pub const LIGHT: Self = Self(1);
-    pub const DIRAC_DELTA: Self = Self(1 << 1);
+    pub const ONLY_DIRAC_DELTA: Self = Self(1);
     pub fn contains(&self, other: Self) -> bool {
         (*self | other) == *self
     }
@@ -81,9 +80,9 @@ impl Mat {
         match self {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
-            Self::Light(_) => unreachable!(),
+            Self::Light(_) | Self::Invisible => unreachable!(),
             Self::Glossy(m) => m.eval(wo, wi, sect),
-            Self::Invisible | Self::Refractive(_) => Vec3::ONE,
+            Self::Refractive(_) => Vec3::ONE,
         }
     }
     pub fn scatter(
@@ -95,18 +94,14 @@ impl Mat {
         match self {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => ScatterStatus::EXIT,
-            Self::Invisible => {
-                ray.origin = sect.pos - sect.nor * 0.00001;
-                ScatterStatus::DIRAC_DELTA
-            }
+            Self::Invisible => unreachable!(),
             Self::Glossy(m) => m.scatter(sect, ray, rng),
             Self::Refractive(m) => m.scatter(sect, ray, rng),
         }
     }
-    pub fn properties(&self) -> MaterialProperties {
+    pub const fn properties(&self) -> MaterialProperties {
         match self {
-            Self::Refractive(_) | Self::Invisible => MaterialProperties::DIRAC_DELTA,
-            Self::Light(_) => MaterialProperties::LIGHT,
+            Self::Refractive(_) => MaterialProperties::ONLY_DIRAC_DELTA,
             _ => MaterialProperties::NORMAL,
         }
     }
@@ -147,17 +142,16 @@ impl Mat {
         }
         match self {
             Self::Matte(m) => m.bxdf_cos(sect, wo, wi),
-            Self::Light(_) | Self::Invisible | Self::Refractive(_) => {
-                unreachable!()
-            }
+            Self::Light(_) | Self::Invisible | Self::Refractive(_) => unreachable!(),
             Self::Glossy(m) => m.bxdf_cos(wo, wi, sect),
         }
     }
     #[must_use]
     fn requires_local_space(&self) -> bool {
         match self {
-            Self::Matte(_) | Self::Light(_) | Self::Invisible | Self::Refractive(_) => false,
+            Self::Matte(_) | Self::Light(_) | Self::Refractive(_) => false,
             Self::Glossy(_) => true,
+            Self::Invisible => unreachable!(),
         }
     }
     #[must_use]
@@ -194,7 +188,7 @@ impl Matte {
         outgoing.dot(normal).max(0.0) * FRAC_1_PI
     }
     #[must_use]
-    pub fn bxdf_cos(&self, sect: &Intersection, wo: Vec3, wi: Vec3) -> Vec3 {
+    pub fn bxdf_cos(&self, sect: &Intersection, _: Vec3, wi: Vec3) -> Vec3 {
         self.albedo(sect.uv) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
     }
     #[must_use]
