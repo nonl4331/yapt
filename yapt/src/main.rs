@@ -295,7 +295,7 @@ pub struct RenderSettings {
     pub headless: bool,
     #[arg(short, long, default_value_t = 0)]
     camera_idx: usize,
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     disable_shading_normals: bool,
 }
 
