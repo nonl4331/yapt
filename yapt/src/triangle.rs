@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{enable_feature, prelude::*};
 use bvh::aabb::{Aabb, Aabound};
 
 #[derive(Debug, new, PartialEq)]
@@ -147,13 +147,15 @@ impl Tri {
 
         let t = inv_det * t_scaled;
 
-        //let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
-
         let mut normal = b0 * n0 + b1 * n1 + b2 * n2;
-        /*if gnormal.dot(normal) < 0.0 {
-            gnormal = -gnormal;
+
+        if feature_enabled(DISABLE_SHADING_NORMALS) {
+            let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
+            if gnormal.dot(normal) < 0.0 {
+                gnormal = -gnormal;
+            }
+            normal = gnormal;
         }
-        normal = gnormal;*/
 
         let out = normal.dot(ray.dir) < 0.0;
         if !out {

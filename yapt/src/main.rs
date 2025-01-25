@@ -28,10 +28,11 @@ pub mod work_handler;
 
 pub mod prelude {
     pub use crate::{
-        camera::Cam, coord::*, envmap::*, integrator::*, loader, material::*, pssmlt::MinRng,
-        texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection, RenderSettings,
-        Splat, BVH, CAM, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES,
-        TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
+        camera::Cam, coord::*, envmap::*, feature_enabled, integrator::*, loader, material::*,
+        pssmlt::MinRng, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
+        RenderSettings, Splat, BVH, CAM, DISABLE_SHADING_NORMALS, ENVMAP, HEIGHT, MATERIALS,
+        MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES,
+        WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -70,6 +71,23 @@ pub static TEXTURE_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
     Mutex::new(std::cell::OnceCell::new());
 pub static ENVMAP: SyncUnsafeCell<EnvMap> = SyncUnsafeCell::new(EnvMap::DEFAULT);
 pub static CAM: SyncUnsafeCell<Cam> = SyncUnsafeCell::new(crate::camera::PLACEHOLDER);
+
+pub static OPTIONS: SyncUnsafeCell<u64> = SyncUnsafeCell::new(0);
+pub const DISABLE_SHADING_NORMALS: u64 = 1;
+
+pub fn feature_enabled(option: u64) -> bool {
+    unsafe { OPTIONS.get().as_ref_unchecked() & option == option }
+}
+pub fn enable_feature(option: u64) {
+    unsafe {
+        *OPTIONS.get().as_mut_unchecked() |= option;
+    }
+}
+pub fn disable_feature(option: u64) {
+    unsafe {
+        *OPTIONS.get().as_mut_unchecked() &= !option;
+    }
+}
 
 #[derive(clap::ValueEnum, Copy, Clone, Default)]
 pub enum IntegratorType {
@@ -277,6 +295,8 @@ pub struct RenderSettings {
     pub headless: bool,
     #[arg(short, long, default_value_t = 0)]
     camera_idx: usize,
+    #[arg(long, default_value_t = true)]
+    disable_shading_normals: bool,
 }
 
 impl Default for RenderSettings {
@@ -300,6 +320,7 @@ impl Default for RenderSettings {
             #[cfg(feature = "gui")]
             headless: false,
             camera_idx: 0,
+            disable_shading_normals: false,
         }
     }
 }
@@ -334,6 +355,12 @@ impl App {
     ) -> Self {
         let (update_recv, work_req) =
             work_handler::create_work_handler(render_settings.num_threads);
+
+        // apply options
+        if render_settings.disable_shading_normals {
+            enable_feature(DISABLE_SHADING_NORMALS);
+        }
+
         let mut a = Self {
             #[cfg(feature = "gui")]
             egui_state,
@@ -351,6 +378,7 @@ impl App {
             #[cfg(feature = "gui")]
             display_settings: false,
         };
+
         a.init();
         if a.render_settings.samples != 0 {
             a.work_req
