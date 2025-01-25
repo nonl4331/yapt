@@ -74,7 +74,6 @@ impl Mat {
     #[must_use]
     pub fn eval(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
         let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
-        wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
@@ -121,7 +120,7 @@ impl Mat {
         }
     }
     #[must_use]
-    pub fn le(&self, _pos: Vec3, _wo: Vec3) -> Vec3 {
+    pub fn le(&self) -> Vec3 {
         match self {
             Self::Matte(_) | Self::Glossy(_) | Self::Refractive(_) | Self::Invisible => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
@@ -131,7 +130,6 @@ impl Mat {
     #[must_use]
     pub fn spdf(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> f32 {
         // wo should be pointing away from the surface for BRDFs
-        wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
@@ -144,7 +142,6 @@ impl Mat {
     }
     #[must_use]
     pub fn bxdf_cos(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
-        wo = -wo;
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
@@ -156,12 +153,14 @@ impl Mat {
             Self::Glossy(m) => m.bxdf_cos(wo, wi, sect),
         }
     }
+    #[must_use]
     fn requires_local_space(&self) -> bool {
         match self {
             Self::Matte(_) | Self::Light(_) | Self::Invisible | Self::Refractive(_) => false,
             Self::Glossy(_) => true,
         }
     }
+    #[must_use]
     fn to_local_space(sect: &Intersection, wo: Vec3, wi: Vec3) -> (Vec3, Vec3) {
         let coord = crate::coord::Coordinate::new_from_z(sect.nor);
         (coord.global_to_local(wo), coord.global_to_local(wi))

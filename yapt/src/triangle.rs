@@ -191,7 +191,7 @@ impl Tri {
 
         let ray = Ray::new(sect.pos, dir);
 
-        let le = mats[self.mat].le(point, dir);
+        let le = mats[self.mat].le();
 
         (ray, le)
     }
