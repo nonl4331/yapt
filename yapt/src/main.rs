@@ -52,10 +52,10 @@ use prelude::*;
 
 use clap::Parser;
 
-const CHUNK_SIZE: usize = 4096;
+const _CHUNK_SIZE: usize = 4096;
 
-const BOOTSTRAP_CHAINS: usize = 100_000;
-const CHAINS: usize = 100;
+const _BOOTSTRAP_CHAINS: usize = 100_000;
+const _CHAINS: usize = 100;
 
 pub static VERTICES: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
 pub static NORMALS: SyncUnsafeCell<Vec<Vec3>> = SyncUnsafeCell::new(vec![]);
@@ -471,7 +471,7 @@ impl App {
 }
 
 // REC.2020 -> XYZ.Y (not entirely sure if this is correct)
-fn scalar_contribution(rgb: Vec3) -> f32 {
+fn _scalar_contribution(rgb: Vec3) -> f32 {
     (0.144616903586208 * rgb.x + 0.677998071518871 * rgb.y + 0.0280726930490874 * rgb.z).max(0.0001)
     // max is to avoid NAN
 }

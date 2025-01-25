@@ -291,6 +291,6 @@ fn work_pixels(
     Update::Calculation(splats, workload_id, rays)
 }
 
-fn work_mutations(_mutations: u64, _rng: Pcg64Mcg, _state: &State, _workload_id: u64) -> Update {
+fn _work_mutations(_mutations: u64, _rng: Pcg64Mcg, _state: &State, _workload_id: u64) -> Update {
     todo!()
 }

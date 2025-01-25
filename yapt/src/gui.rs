@@ -51,6 +51,23 @@ impl eframe::App for App {
                             self.work_duration.as_secs_f64(),
                             rs.samples
                         );
+                        if !rs.filename.is_empty() {
+                            let mult = 1.0 / rs.samples as f64;
+                            image::save_buffer(
+                                rs.filename.to_owned(),
+                                &self
+                                    .canvas
+                                    .iter()
+                                    .map(|v| [v.x as f64, v.y as f64, v.z as f64])
+                                    .flatten()
+                                    .map(|v| ((v * mult).powf(1.0 / 2.2) * 255.0) as u8)
+                                    .collect::<Vec<_>>(),
+                                rs.width.into(),
+                                rs.height.into(),
+                                image::ColorType::Rgb8,
+                            )
+                            .unwrap();
+                        }
                     }
                 }
                 Update::Calculation(_, workload_id, _) => {
