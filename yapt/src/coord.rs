@@ -43,7 +43,7 @@ impl Coordinate {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Quaternion {
     w: f32,
     x: f32,
@@ -74,6 +74,12 @@ impl Quaternion {
 impl From<Vec3> for Quaternion {
     fn from(v: Vec3) -> Self {
         Self::new(0.0, v.x, v.y, v.z)
+    }
+}
+
+impl From<[f32; 4]> for Quaternion {
+    fn from(v: [f32; 4]) -> Self {
+        Self::new(v[0], v[1], v[2], v[3])
     }
 }
 

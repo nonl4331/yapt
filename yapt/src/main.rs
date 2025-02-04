@@ -20,6 +20,7 @@ pub mod gui;
 pub mod integrator;
 pub mod loader;
 pub mod material;
+pub mod overrides;
 pub mod pssmlt;
 pub mod scene;
 pub mod texture;

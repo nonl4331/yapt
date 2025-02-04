@@ -28,8 +28,6 @@ mod tests {
         }
     }
 
-    // false positive
-    #[allow(dead_code)]
     fn logging_init() {
         let _ = env_logger::Builder::new()
             .filter_level(log::LevelFilter::Info)
