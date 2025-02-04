@@ -499,3 +499,29 @@ impl Index<usize> for Vec3 {
         }
     }
 }
+
+#[cfg(feature = "json")]
+mod j {
+    use super::*;
+    use json::JsonValue;
+    impl TryFrom<&[JsonValue]> for Vec3 {
+        type Error = &'static str;
+        fn try_from(value: &[JsonValue]) -> Result<Self, Self::Error> {
+            if let [JsonValue::Number(x), JsonValue::Number(y), JsonValue::Number(z)] = value[..] {
+                Ok(Vec3::new(x.into(), y.into(), z.into()))
+            } else {
+                Err("Failed to parse into Vec3")
+            }
+        }
+    }
+    impl TryFrom<&JsonValue> for Vec3 {
+        type Error = &'static str;
+        fn try_from(value: &JsonValue) -> Result<Self, Self::Error> {
+            if let JsonValue::Array(arr) = value {
+                Ok(arr[..].try_into()?)
+            } else {
+                Err("Failed to parse into Vec3")
+            }
+        }
+    }
+}
