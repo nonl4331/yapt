@@ -1,6 +1,32 @@
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering::SeqCst;
+    pub static LOADED_DATA: AtomicBool = AtomicBool::new(false);
     use rand::thread_rng;
+
+    const ONE_TEX: usize = 0;
+    const ZERO_TEX: usize = 1;
+    const RAND_TEX: usize = 2;
+
+    fn init_test() {
+        if LOADED_DATA.load(SeqCst) {
+            return;
+        }
+        LOADED_DATA.store(true, SeqCst);
+        logging_init();
+        unsafe {
+            use crate::loader::add_texture;
+            let mut rng = rand::thread_rng();
+            let one = add_texture("", Texture::Solid(Vec3::ONE));
+            assert_eq!(one, ONE_TEX);
+            let zero = add_texture("", Texture::Solid(Vec3::ZERO));
+            assert_eq!(zero, ZERO_TEX);
+            // note Y is roughness
+            let rand = add_texture("", Texture::Solid(Vec3::Y * rng.gen()));
+            assert_eq!(rand, RAND_TEX);
+        }
+    }
 
     // false positive
     #[allow(dead_code)]
@@ -22,22 +48,24 @@ mod tests {
 
     #[test]
     pub fn lambertian() {
+        init_test();
         let mut rng = thread_rng();
-        let wo = -generate_wo(&mut rng, true);
+        let wo = generate_wo(&mut rng, true);
 
-        let mat = Mat::Matte(Matte::new(Vec3::ZERO));
+        let mat = Mat::Matte(Matte::new(ZERO_TEX));
 
         test_material("lambertian", mat, wo, &mut rng);
     }
 
     #[test]
     pub fn ggx() {
+        init_test();
         let mut rng = thread_rng();
-        let wo = -generate_wo(&mut rng, true);
-        let a = rng.gen();
+        let wo = generate_wo(&mut rng, true);
+        let a = get_a();
 
         let name = "ggx";
-        let mat = Mat::Glossy(Ggx::new(a, Vec3::ONE));
+        let mat = Mat::Glossy(Ggx::new(RAND_TEX, ONE_TEX));
 
         log_info("ggx", format!("alpha: {a}"));
 
@@ -49,7 +77,7 @@ mod tests {
     }
 
     fn test_material(name: &str, m: Mat, wo: Vec3, rng: &mut impl MinRng) {
-        let sect = &Intersection::new(1.0, Vec3::ZERO, Vec3::Z, true, 0, 0);
+        let sect = &Intersection::new(1.0, Vec2::ZERO, Vec3::ZERO, Vec3::Z, true, 0, 0);
 
         let sample = || -> Vec3 {
             let mut ray = Ray::new(Vec3::ZERO, wo);
@@ -69,19 +97,26 @@ mod tests {
         assert!((sum - 1.0).abs() < PDF_EPS);
     }
 
+    fn get_a() -> f32 {
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        texs[RAND_TEX].uv_value(Vec2::ZERO)[1].max(0.0001)
+    }
+
     #[test]
     fn vndf() {
+        init_test();
         let mut rng = thread_rng();
         let wo = generate_wo(&mut rng, true);
-        let a = rng.gen();
+        let a = get_a();
+        let a_sq = a.powi(2);
 
         let name = "ggx_vndf";
-        let mat = Ggx::new(a, Vec3::ONE);
+        let mat = Ggx::new(RAND_TEX, ONE_TEX);
 
         log_info("ggx_vndf", format!("alpha: {a}"));
 
-        let sample = || -> Vec3 { mat.sample_vndf_local(wo, &mut rng) };
-        let pdf = |wo: Vec3, wm: Vec3| -> f32 { mat.vndf_local(wm, wo) };
+        let sample = || -> Vec3 { mat.sample_vndf_local(a, wo, &mut rng) };
+        let pdf = |wo: Vec3, wm: Vec3| -> f32 { mat.vndf_local(a_sq, wm, wo) };
 
         log_info(name, format!("wo: {wo}"));
 
@@ -95,22 +130,24 @@ mod tests {
 
     #[test]
     fn vndf_transformed() {
+        init_test();
         let mut rng = thread_rng();
         let wo = generate_wo(&mut rng, true);
-        let a = rng.gen();
+        let a = get_a();
+        let a_sq = a.powi(2);
 
         let name = "ggx_vndf_transformed";
-        let mat = Ggx::new(a, Vec3::ONE);
+        let mat = Ggx::new(RAND_TEX, ONE_TEX);
 
         log_info("ggx_vndf_transformed", format!("alpha: {a}"));
 
         let sample = || -> Vec3 {
-            let wm = mat.sample_vndf_local(wo, &mut rng);
+            let wm = mat.sample_vndf_local(a, wo, &mut rng);
             wo.reflected(wm)
         };
         let pdf = |wo: Vec3, wi: Vec3| -> f32 {
             let wm = (wo + wi).normalised();
-            mat.vndf_local(wm, wo) / (4.0 * wo.dot(wm))
+            mat.vndf_local(a_sq, wm, wo) / (4.0 * wo.dot(wm))
         };
 
         log_info(name, format!("wo: {wo}"));
@@ -127,13 +164,14 @@ mod tests {
     // i.e. projected area = 1
     #[test]
     fn ndf_area() {
-        let mut rng = thread_rng();
-        let a = rng.gen();
+        init_test();
+        let a = get_a();
+        let a_sq = a.powi(2);
 
         let name = "ggx_ndf_area";
-        let mat = Ggx::new(a, Vec3::ONE);
+        let mat = Ggx::new(RAND_TEX, ONE_TEX);
 
-        let pdf = |_: Vec3, wm: Vec3| -> f32 { mat.ndf_local(wm) * wm.z };
+        let pdf = |_: Vec3, wm: Vec3| -> f32 { mat.ndf_local(a_sq, wm) * wm.z };
 
         log_info("ggx_ndf_area", format!("alpha: {a}"));
 
@@ -145,17 +183,19 @@ mod tests {
 
     #[test]
     fn weak_white_furnace() {
+        init_test();
         let mut rng = thread_rng();
-        let a = rng.gen();
+        let a = get_a();
+        let a_sq = a.powi(2);
 
         let wo = generate_wo(&mut rng, true);
 
         let name = "weak_white_furnace";
-        let mat = Ggx::new(a, Vec3::ONE);
+        let mat = Ggx::new(RAND_TEX, ONE_TEX);
 
         let pdf = |wo: Vec3, wi: Vec3| -> f32 {
             let wm = (wo + wi).normalised();
-            mat.ndf_local(wm) * mat.g1_local(wo, wm) / (4.0 * wo.z.abs())
+            mat.ndf_local(a_sq, wm) * mat.g1_local(a_sq, wo, wm) / (4.0 * wo.z.abs())
         };
 
         log_info("weak_white_furnace", format!("alpha: {a}"));
