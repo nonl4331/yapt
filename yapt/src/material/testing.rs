@@ -78,7 +78,7 @@ mod tests {
         let sect = &Intersection::new(1.0, Vec2::ZERO, Vec3::ZERO, Vec3::Z, true, 0, 0);
 
         let sample = || -> Vec3 {
-            let mut ray = Ray::new(Vec3::ZERO, wo);
+            let mut ray = Ray::new(Vec3::ZERO, -wo);
             m.scatter(sect, &mut ray, rng);
             ray.dir
         };
