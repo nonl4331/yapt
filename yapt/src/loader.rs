@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
-use gltf::{material::AlphaMode, Node};
+use gltf::Node;
 
-use crate::prelude::*;
+use crate::{
+    overrides::{self, Overrides, TexIdentifier, TexOverride},
+    prelude::*,
+    MainRenderSettings,
+};
 
 pub unsafe fn add_material<A: Into<String>>(names: Vec<A>, material: Mat) {
     let mut lock = MATERIAL_NAMES.lock().unwrap();
@@ -41,9 +45,8 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
 
 pub unsafe fn load_gltf(
     path: &str,
-    scale: f32,
-    offset: Vec3,
-    render_settings: &RenderSettings,
+    render_settings: &MainRenderSettings,
+    overrides: &Overrides,
 ) -> Vec<Cam> {
     let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
     let texs = unsafe { TEXTURES.get().as_mut_unchecked() };
@@ -95,9 +98,9 @@ pub unsafe fn load_gltf(
 
     let mut node_queue = vec![NodeCollection::new(
         scene.nodes().collect(),
-        offset,
+        Vec3::ZERO,
         Quaternion::new(1.0, 0.0, 0.0, 0.0),
-        Vec3::splat(scale),
+        Vec3::ONE,
     )];
 
     while let Some(NodeCollection {
@@ -124,10 +127,15 @@ pub unsafe fn load_gltf(
 
             // load camera if it exists
             if let Some(cam) = node.camera() {
+                // TODO: DO THIS LATER
+                /*let cam_name = cam
+                .name()
+                .map(|s| s.to_owned())
+                .unwrap_or(cam.index().to_string());*/
+
                 if let gltf::camera::Projection::Perspective(perp) = cam.projection() {
                     let hfov = (perp.yfov()
-                        * (render_settings.width.get() as f32
-                            / render_settings.height.get() as f32))
+                        * (render_settings.width as f32 / render_settings.height as f32))
                         .to_degrees();
                     log::info!(
                         "Loaded cam {} @ {} with fov {}deg & quat {:?}",
@@ -147,17 +155,44 @@ pub unsafe fn load_gltf(
 
             // load mesh if it exists
             if let Some(mesh) = node.mesh() {
+                let mesh_name = mesh.name().unwrap_or("");
+                let m_override = overrides.mesh.get(mesh_name);
+
+                let mat = m_override
+                    .map(|o| o.material.clone())
+                    .unwrap_or(overrides::MatIdentifier::Default);
+
+                if let overrides::MatIdentifier::Invisible = mat {
+                    continue;
+                }
+
+                let offset = m_override.map(|o| o.offset).unwrap_or(Vec3::ZERO);
+                let _rot = m_override
+                    .map(|o| o.rot)
+                    .unwrap_or(overrides::Rot::Identity);
+                let scale = m_override.map(|o| o.scale).unwrap_or(1.0);
+
                 for primitive in mesh.primitives() {
                     let mat = primitive.material();
 
-                    // 0 reserved for default
-                    let fallback_name: String = mat.index().map(|v| v + 1).unwrap_or(0).to_string();
-                    let mat_name = mat.name().map(|s| s.to_owned()).unwrap_or(fallback_name);
+                    // "" reserved for default
+                    let fallback_name: String = mat
+                        .index()
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(String::new);
+
+                    let mut mat_name = mat.name().map(|s| s.to_owned()).unwrap_or(fallback_name);
+                    if let Some(overrides::MatIdentifier::Name(name)) =
+                        m_override.map(|o| o.material.clone())
+                    {
+                        mat_name = name;
+                    }
 
                     let idx = if !mat_names.contains_key(&mat_name) {
                         let idx = mats.len();
                         mats.push(
-                            mat_to_mat(&bufs, &mat, mat_name.clone(), texs, tex_names).unwrap(),
+                            mat_to_mat(&bufs, &mat, mat_name.clone(), tex_names, &overrides)
+                                .unwrap(),
                         );
                         mat_names.insert(mat_name, idx);
                         idx
@@ -174,12 +209,14 @@ pub unsafe fn load_gltf(
                             let uv_offset = uvs.len();
 
                             let apply_transform = |v: Vec3| -> Vec3 {
-                                let v = v.hadamard(local_scale);
+                                let v = v.hadamard(local_scale * Vec3::splat(scale as f32));
+                                // figure out how to chain rotations
                                 local_rotation
                                     .hamilton(v.into())
                                     .hamilton(local_rotation.conj())
                                     .xyz()
                                     + local_translation
+                                    + offset
                             };
 
                             let new_verticies: Vec<Vec3> = reader
@@ -259,101 +296,182 @@ pub unsafe fn load_gltf(
     cams
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TexType {
+    Colour,
+    RoughnessMetallic,
+    Ior,
+}
+
 fn get_tex_idx(
-    bufs: &[gltf::buffer::Data],
-    tex_names: &mut HashMap<String, usize>,
-    texs: &mut Vec<Texture>,
-    info: Option<gltf::texture::Info>,
-    fallback: [f32; 4],
     tex_name: String,
-    alpha_mode: AlphaMode,
-    alpha_cuttof: f32,
+    tex_names: &mut HashMap<String, usize>,
+    overrides: &Overrides,
+    mat: &gltf::Material,
+    tex_type: TexType,
+    bufs: &[gltf::buffer::Data],
 ) -> usize {
+    let metallic_roughness = mat.pbr_metallic_roughness();
+    let texs = unsafe { TEXTURES.get().as_mut_unchecked() };
+    // 1.
     if let Some(idx) = tex_names.get(&tex_name) {
         return *idx;
     }
 
     let idx = texs.len();
+    tex_names.insert(tex_name.clone(), idx);
 
-    let tex = if let Some(info) = info {
-        let tex = info.texture();
-        let source = tex.source().source();
-        let gltf::image::Source::View { view, .. } = source else {
-            panic!()
-        };
-        let buff = &bufs[view.buffer().index()];
+    // 2.
+    if let Some(tex_override) = overrides.tex.get(&tex_name) {
+        match tex_override {
+            TexOverride::Default => {}
+            TexOverride::Rgb(rgb) => {
+                let tex = Texture::Solid(*rgb);
+                texs.push(tex);
+                return idx;
+            }
+            TexOverride::Path(_) => unimplemented!(),
+            TexOverride::Data(_) => unimplemented!(),
+        }
+    }
 
-        let start = view.offset();
-        let end = start + view.length();
-        let tex_data = &buff[start..end];
-        let image = image::load_from_memory(tex_data).unwrap();
-        let image = image.to_rgba32f();
-        let dim = image.dimensions();
-        let image = image.into_vec();
-        Texture::Image(Image::from_rgbaf32(
-            dim.0 as usize,
-            dim.1 as usize,
-            image,
-            alpha_mode,
-            alpha_cuttof,
-        ))
-    } else {
-        Texture::Solid(Vec3::new(fallback[0], fallback[1], fallback[2]))
+    // 3. default is metallic (for now)
+    let alpha_mode = mat.alpha_mode();
+    let alpha_cuttof = mat.alpha_cutoff().unwrap_or(0.5);
+
+    let get_tex = |tex_info2: Option<gltf::texture::Info<'_>>, fallback| {
+        if let Some(tex_info) = tex_info2 {
+            let tex = tex_info.texture();
+            let source = tex.source().source();
+            let gltf::image::Source::View { view, .. } = source else {
+                panic!()
+            };
+            let buff = &bufs[view.buffer().index()];
+
+            let start = view.offset();
+            let end = start + view.length();
+            let tex_data = &buff[start..end];
+            let image = image::load_from_memory(tex_data).unwrap();
+            let image = image.to_rgba32f();
+            let dim = image.dimensions();
+            let image = image.into_vec();
+            Texture::Image(Image::from_rgbaf32(
+                dim.0 as usize,
+                dim.1 as usize,
+                image,
+                alpha_mode,
+                alpha_cuttof,
+            ))
+        } else {
+            Texture::Solid(fallback)
+        }
     };
 
+    let tex = match tex_type {
+        // use roughness metallic as IOR
+        TexType::RoughnessMetallic | TexType::Ior => get_tex(
+            metallic_roughness.metallic_roughness_texture(),
+            Vec3::new(
+                0.0,
+                metallic_roughness.roughness_factor(),
+                metallic_roughness.metallic_factor(),
+            ),
+        ),
+        TexType::Colour => {
+            let col = metallic_roughness.base_color_factor();
+            get_tex(
+                metallic_roughness.base_color_texture(),
+                Vec3::new(col[0], col[1], col[2]),
+            )
+        }
+    };
     texs.push(tex);
-    tex_names.insert(tex_name, idx);
-    idx
+    return idx;
 }
 
+use overrides::MatType;
 fn mat_to_mat(
     bufs: &[gltf::buffer::Data],
     gltf_mat: &gltf::Material,
     mat_name: String,
-    texs: &mut Vec<Texture>,
     tex_names: &mut HashMap<String, usize>,
+    overrides: &Overrides,
 ) -> Option<Mat> {
-    let roughness = gltf_mat.pbr_metallic_roughness();
+    let mat_overrides = overrides.mat.get(&mat_name);
 
-    // get base col
-    let base_col_idx = get_tex_idx(
-        bufs,
-        tex_names,
-        texs,
-        roughness.base_color_texture(),
-        roughness.base_color_factor(),
-        format!("{mat_name}_base_colour"),
-        gltf_mat.alpha_mode(),
-        gltf_mat.alpha_cutoff().unwrap_or(0.5),
-    );
+    let mat_type = mat_overrides
+        .map(|o| o.mtype)
+        .unwrap_or(overrides::MatType::Default);
 
-    // get roughness
-    let metallic_roughness_idx = get_tex_idx(
-        bufs,
-        tex_names,
-        texs,
-        roughness.metallic_roughness_texture(),
-        [
-            0.0,
-            roughness.roughness_factor(),
-            roughness.metallic_factor(),
-            1.0,
-        ],
-        format!("{mat_name}_base_roughness"),
-        gltf_mat.alpha_mode(),
-        gltf_mat.alpha_cutoff().unwrap_or(0.5),
-    );
+    let mat = match mat_type {
+        MatType::Default | MatType::Metallic => {
+            let mut base_colour = format!("{mat_name}.base_colour");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+                log::info!("Found override for {base_colour}");
+                base_colour = name;
+            }
 
-    // lambertian at roughness = 1.0
-    match &texs[metallic_roughness_idx] {
-        Texture::Solid(v) if v.y == 1.0 => {
-            return Some(Mat::Matte(Matte::new(base_col_idx)));
+            let base_colour_tex = get_tex_idx(
+                base_colour,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Colour,
+                bufs,
+            );
+
+            let mut metallic_roughness = format!("{mat_name}.metallic_roughness");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+                log::info!("Found override for {metallic_roughness}");
+                metallic_roughness = name;
+            }
+
+            let metallic_roughness_tex = get_tex_idx(
+                metallic_roughness,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Ior,
+                bufs,
+            );
+            Mat::Glossy(Ggx::new(metallic_roughness_tex, base_colour_tex))
         }
-        Texture::Image(img) if img.backing.iter().all(|v| v[1] == 1.0) => {
-            return Some(Mat::Matte(Matte::new(base_col_idx)));
-        }
-        _ => {}
-    }
+        MatType::Light => {
+            let irradiance = mat_overrides
+                .map(|o| o.irradiance)
+                .flatten()
+                .unwrap_or(Vec3::ONE);
 
-    Some(Mat::Glossy(Ggx::new(metallic_roughness_idx, base_col_idx)))
+            Mat::Light(Light::new(irradiance))
+        }
+        MatType::Diffuse => {
+            let mut base_colour = format!("{mat_name}.base_colour");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+                log::info!("Found override for {base_colour}");
+                base_colour = name;
+            }
+
+            let base_colour_tex = get_tex_idx(
+                base_colour,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Colour,
+                bufs,
+            );
+
+            Mat::Matte(Matte::new(base_colour_tex))
+        }
+        MatType::Glass => {
+            let ior = mat_overrides
+                .map(|o| o.ior.map(|ior| ior as f32))
+                .flatten()
+                .unwrap_or(1.5);
+            Mat::Refractive(Refractive::new(ior))
+        }
+        MatType::Invisible => unreachable!(), // this should be checked before this function!
+        MatType::Glossy => unimplemented!(),
+    };
+
+    Some(mat)
 }

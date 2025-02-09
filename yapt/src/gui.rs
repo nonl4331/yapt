@@ -51,10 +51,10 @@ impl eframe::App for App {
                             self.work_duration.as_secs_f64(),
                             rs.samples
                         );
-                        if !rs.filename.is_empty() {
+                        if !rs.output_filename.is_empty() {
                             let mult = 1.0 / rs.samples as f64;
                             image::save_buffer(
-                                rs.filename.to_owned(),
+                                rs.output_filename.to_owned(),
                                 &self
                                     .canvas
                                     .iter()
@@ -155,7 +155,7 @@ impl eframe::App for App {
                         let mult = ((u32::from(rs.width) * u32::from(rs.height)) as f64
                             / self.splats_done as f64) as f32;
                         image::save_buffer(
-                            format!("{spp:.0}_{}", rs.filename),
+                            format!("{spp:.0}_{}", rs.output_filename),
                             &self
                                 .canvas
                                 .iter()
@@ -203,9 +203,9 @@ impl eframe::App for App {
                 ui.label(format!("samples: {}", rs.samples));
                 ui.label(format!(
                     "u: [{}..{})\nv: [{}..{})",
-                    rs.u_low, rs.u_high, rs.v_low, rs.v_high
+                    rs.u.x, rs.u.y, rs.v.x, rs.v.y
                 ));
-                ui.label(format!("output filename: {}", rs.filename));
+                ui.label(format!("output filename: {}", rs.output_filename));
                 ui.label(format!("use PSSMLT: {}", rs.pssmlt));
             });
     }

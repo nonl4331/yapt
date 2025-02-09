@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, MainRenderSettings};
 
 pub const PLACEHOLDER: Cam = Cam {
     lower_left: Vec3 {
@@ -25,7 +25,7 @@ pub const PLACEHOLDER: Cam = Cam {
     height: 1024,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cam {
     pub lower_left: Vec3,
     pub up: Vec3,
@@ -43,7 +43,7 @@ impl Cam {
         origin: Vec3,
         mut rotation: Vec3,
         hfov: f32,
-        render_settings: &RenderSettings,
+        render_settings: &MainRenderSettings,
         degrees: bool,
     ) -> Self {
         if degrees {
@@ -74,7 +74,7 @@ impl Cam {
         origin: Vec3,
         q: Quaternion,
         hfov: f32,
-        render_settings: &RenderSettings,
+        render_settings: &MainRenderSettings,
     ) -> Self {
         let qp = q.conj();
 
@@ -84,8 +84,7 @@ impl Cam {
         let forward: Quaternion = Vec3::new(0.0, 0.0, -1.0).into();
         let forward = q.hamilton(forward).hamilton(qp).xyz();
 
-        let aspect_ratio =
-            u32::from(render_settings.width) as f32 / u32::from(render_settings.height) as f32;
+        let aspect_ratio = render_settings.width as f32 / render_settings.height as f32;
         let right_mag = 2.0 * (0.5 * hfov.to_radians()).tan();
         let up_mag = right_mag / aspect_ratio;
 
@@ -93,9 +92,9 @@ impl Cam {
         let up = right.cross(forward).normalised() * up_mag;
 
         let lower_left = origin - 0.5 * right - 0.5 * up + forward;
-        let lower_left = lower_left + render_settings.u_low * right + render_settings.v_low * up;
-        let right = right * (render_settings.u_high - render_settings.u_low);
-        let up = up * (render_settings.v_high - render_settings.v_low);
+        let lower_left = lower_left + render_settings.u.x * right + render_settings.v.x * up;
+        let right = right * (render_settings.u.y - render_settings.u.x);
+        let up = up * (render_settings.v.y - render_settings.v.x);
 
         Self {
             lower_left,
@@ -113,12 +112,11 @@ impl Cam {
         mut up: Vec3,
         hfov: f32,
         focus_dist: f32,
-        render_settings: &RenderSettings,
+        render_settings: &MainRenderSettings,
     ) -> Self {
         let forward = (look_at - origin).normalised();
         up.normalise();
-        let aspect_ratio =
-            u32::from(render_settings.width) as f32 / u32::from(render_settings.height) as f32;
+        let aspect_ratio = render_settings.width as f32 / render_settings.height as f32;
 
         let right_mag = focus_dist * 2.0 * (0.5 * hfov.to_radians()).tan();
         let up_mag = right_mag / aspect_ratio;
@@ -127,9 +125,9 @@ impl Cam {
         let up = right.cross(forward).normalised() * up_mag;
 
         let lower_left = origin - 0.5 * right - 0.5 * up + forward * focus_dist;
-        let lower_left = lower_left + render_settings.u_low * right + render_settings.v_low * up;
-        let right = right * (render_settings.u_high - render_settings.u_low);
-        let up = up * (render_settings.v_high - render_settings.v_low);
+        let lower_left = lower_left + render_settings.u.x * right + render_settings.v.x * up;
+        let right = right * (render_settings.u.y - render_settings.u.x);
+        let up = up * (render_settings.v.y - render_settings.v.x);
 
         Self {
             lower_left,

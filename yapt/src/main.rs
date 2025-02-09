@@ -8,7 +8,6 @@
 )]
 pub const WIDTH: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
 pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unchecked(1024) };
-const SAMPLES: u64 = 1000;
 pub const NO_TEXTURE: usize = usize::MAX;
 
 pub mod camera;
@@ -22,7 +21,6 @@ pub mod loader;
 pub mod material;
 pub mod overrides;
 pub mod pssmlt;
-pub mod scene;
 pub mod texture;
 pub mod triangle;
 pub mod work_handler;
@@ -31,9 +29,8 @@ pub mod prelude {
     pub use crate::{
         camera::Cam, coord::*, envmap::*, feature_enabled, integrator::*, loader, material::*,
         pssmlt::MinRng, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
-        RenderSettings, Splat, BVH, CAM, DISABLE_SHADING_NORMALS, ENVMAP, HEIGHT, MATERIALS,
-        MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES,
-        WIDTH,
+        Splat, BVH, CAM, DISABLE_SHADING_NORMALS, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES,
+        NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -47,8 +44,13 @@ pub mod prelude {
     };
     pub use utility::{Ray, Vec2, Vec3};
 }
-use std::sync::Mutex;
+use std::{
+    num::{NonZeroU32, NonZeroUsize},
+    process::exit,
+    sync::Mutex,
+};
 
+use overrides::Overrides;
 use prelude::*;
 
 use clap::Parser;
@@ -90,7 +92,7 @@ pub fn disable_feature(option: u64) {
     }
 }
 
-#[derive(clap::ValueEnum, Copy, Clone, Default)]
+#[derive(clap::ValueEnum, Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub enum IntegratorType {
     Naive,
     #[default]
@@ -156,11 +158,14 @@ impl Intersection {
 fn main() {
     create_logger();
 
-    let args = RenderSettings::parse();
+    let mut args2 = InputParameters::parse();
+
+    let overrides = overrides::load_overrides_file(args2.scene.clone(), &mut args2);
+    let rs: MainRenderSettings = args2.into();
 
     // GUI mode
     #[cfg(feature = "gui")]
-    if !args.headless {
+    if !rs.headless {
         eframe::run_native(
             "yapt",
             eframe::NativeOptions::default(),
@@ -169,16 +174,17 @@ fn main() {
                 let fb_handle = cc.egui_ctx.load_texture(
                     "fb",
                     egui::ImageData::Color(std::sync::Arc::new(egui::ColorImage::new(
-                        [
-                            u32::from(args.width) as usize,
-                            u32::from(args.height) as usize,
-                        ],
+                        [rs.width as usize, rs.height as usize],
                         egui::Color32::BLACK,
                     ))),
                     egui::TextureOptions::default(),
                 );
 
-                let app = App::new(Some((cc.egui_ctx.clone(), fb_handle)), args.clone());
+                let app = App::new(
+                    Some((cc.egui_ctx.clone(), fb_handle)),
+                    rs.clone(),
+                    overrides,
+                );
 
                 Ok(Box::new(app))
             }),
@@ -191,7 +197,8 @@ fn main() {
     let mut app = App::new(
         #[cfg(feature = "gui")]
         None,
-        args.clone(),
+        rs.clone(),
+        overrides,
     );
     let rs = &mut app.render_settings;
     while let Ok(update) = app.update_recv.recv() {
@@ -258,76 +265,161 @@ fn main() {
     }
 }
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug, Default, PartialEq)]
 #[command(about, long_about = None, disable_help_flag = true)]
-pub struct RenderSettings {
+pub struct InputParameters {
+    #[arg(short)]
+    bvh_heatmap: Option<bool>,
+    #[arg(short, long)]
+    width: Option<NonZeroU32>,
+    #[arg(short, long)]
+    height: Option<NonZeroU32>,
+    #[arg(short = 'n', long)]
+    samples: Option<u64>,
+    #[arg(short, long, default_value_t=String::new())]
+    glb_filepath: String, // empty == None
+    #[arg(short, long, default_value_t=String::new())]
+    output_filename: String,
+    #[arg(short, long)]
+    integrator: Option<IntegratorType>,
+    #[arg(short, long, default_value_t=String::new())]
+    environment_map: String,
+    #[arg(long)]
+    u_low: Option<f32>,
+    #[arg(long)]
+    u_high: Option<f32>,
+    #[arg(long)]
+    v_low: Option<f32>,
+    #[arg(long)]
+    v_high: Option<f32>,
+    #[arg(long)]
+    num_threads: Option<usize>,
+    #[arg(short, long, default_value_t=String::new())]
+    camera: String,
+    #[arg(short, default_value_t=String::new())]
+    file_hash: String,
+    #[arg(short)]
+    headless: Option<bool>,
+    #[arg(short)]
+    pssmlt: Option<bool>,
+    #[arg(short)]
+    disable_shading_normals: Option<bool>,
+    #[arg(short, long, default_value_t=String::new())]
+    scene: String,
     #[arg(long, action = clap::ArgAction::HelpLong)]
     pub help: Option<bool>,
-    #[arg(short, default_value_t = false)]
-    pub bvh_heatmap: bool,
-    #[arg(short, long, default_value_t = crate::WIDTH)]
-    pub width: std::num::NonZeroU32,
-    #[arg(short, long, default_value_t = crate::HEIGHT)]
-    pub height: std::num::NonZeroU32,
-    #[arg(short = 'n', long, default_value_t = crate::SAMPLES)]
-    pub samples: u64,
-    #[arg(short='o', long, default_value_t = String::new())]
-    pub filename: String,
-    #[arg(short, long, default_value_t = IntegratorType::default())]
-    pub integrator: IntegratorType,
-    #[arg(short, long, default_value_t = String::new())]
-    pub scene: String,
-    #[arg(short, default_value_t = false)]
-    pub pssmlt: bool,
-    #[arg(short, long)]
-    pub environment_map: Option<String>,
-    #[arg(long, default_value_t = 0.0)]
-    pub u_low: f32,
-    #[arg(long, default_value_t = 1.0)]
-    pub u_high: f32,
-    #[arg(long, default_value_t = 0.0)]
-    pub v_low: f32,
-    #[arg(long, default_value_t = 1.0)]
-    pub v_high: f32,
-    #[arg(long)]
-    pub num_threads: Option<std::num::NonZeroUsize>,
-    #[cfg(feature = "gui")]
-    #[arg(long)]
-    pub headless: bool,
-    #[arg(short, long, default_value_t = 0)]
-    camera_idx: usize,
-    #[arg(long, default_value_t = false)]
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MainRenderSettings {
+    bvh_heatmap: bool,
+    width: u32,
+    height: u32,
+    samples: u64,
+    glb_filepath: String,
+    output_filename: String,
+    integrator: IntegratorType,
+    environment_map: String,
+    u: Vec2,
+    v: Vec2,
+    num_threads: usize,
+    camera: String,
+    headless: bool,
+    pssmlt: bool,
     disable_shading_normals: bool,
 }
 
-impl Default for RenderSettings {
-    fn default() -> Self {
+impl From<InputParameters> for MainRenderSettings {
+    fn from(r: InputParameters) -> Self {
+        // check glb_filepath exists
+        if r.glb_filepath.is_empty() {
+            log::error!("No GLB/GLTF filepath specified.");
+            exit(0);
+        }
+
+        if let Err(e) = std::fs::File::open(&r.glb_filepath) {
+            log::error!("Cannot open glb/gltf @ {}: {e}", r.glb_filepath);
+            exit(0);
+        }
+
+        if r.output_filename.is_empty() {
+            log::warn!("No output file specified, not saving when render finishes");
+        }
+
+        let width = r.width.map(|v| v.into()).unwrap_or_else(|| {
+            log::info!("No width specified defaulting to 1024");
+            1024
+        });
+
+        let height = r.height.map(|v| v.into()).unwrap_or_else(|| {
+            log::info!("No height specified defaulting to 1024");
+            1024
+        });
+
+        let samples = r
+            .samples
+            .map(|v| if v == 0 { u64::MAX } else { v })
+            .unwrap_or(100);
+
+        let bvh_heatmap = r.bvh_heatmap.unwrap_or(false);
+
+        let integrator = r.integrator.unwrap_or(IntegratorType::NEE);
+
+        let validate_bounds = |low: Option<f32>, high: Option<f32>, name| -> Vec2 {
+            let low = low.unwrap_or(0.0);
+            let high = high.unwrap_or(1.0);
+            if low > high {
+                log::error!("{name}.low > {name}.high");
+                exit(0);
+            }
+            if low < 0.0 {
+                log::error!("{name}.low < 0.0");
+                exit(0);
+            }
+            if high > 1.0 {
+                log::error!("{name}.high > 1.0");
+                exit(0);
+            }
+            Vec2::new(low, high)
+        };
+
+        let u = validate_bounds(r.u_low, r.u_high, 'u');
+        let v = validate_bounds(r.v_low, r.v_high, 'v');
+
+        let mut num_threads = r.num_threads.unwrap_or(0);
+        if num_threads == 0 {
+            num_threads = num_cpus::get();
+            log::info!("Using {num_threads} threads.");
+        }
+
+        let headless = r.headless.unwrap_or(false);
+
+        let pssmlt = r.pssmlt.unwrap_or(false);
+
+        let disable_shading_normals = r.disable_shading_normals.unwrap_or(false);
+
         Self {
-            help: None,
-            bvh_heatmap: false,
-            width: crate::WIDTH,
-            height: crate::HEIGHT,
-            samples: crate::SAMPLES,
-            filename: String::new(),
-            integrator: IntegratorType::default(),
-            scene: String::default(),
-            pssmlt: false,
-            environment_map: None,
-            u_low: 0.0,
-            u_high: 1.0,
-            v_low: 0.0,
-            v_high: 1.0,
-            num_threads: None,
-            #[cfg(feature = "gui")]
-            headless: false,
-            camera_idx: 0,
-            disable_shading_normals: false,
+            bvh_heatmap,
+            width,
+            height,
+            samples,
+            glb_filepath: r.glb_filepath,
+            output_filename: r.output_filename,
+            integrator,
+            environment_map: r.environment_map,
+            u,
+            v,
+            num_threads,
+            camera: r.camera,
+            headless,
+            pssmlt,
+            disable_shading_normals,
         }
     }
 }
 
 pub struct App {
-    pub render_settings: RenderSettings,
+    pub render_settings: MainRenderSettings,
     // egui state
     #[cfg(feature = "gui")]
     pub egui_state: Option<(egui::Context, egui::TextureHandle)>,
@@ -352,10 +444,12 @@ pub struct App {
 impl App {
     pub fn new(
         #[cfg(feature = "gui")] egui_state: Option<(egui::Context, egui::TextureHandle)>,
-        render_settings: RenderSettings,
+        render_settings: MainRenderSettings,
+        overrides: Overrides,
     ) -> Self {
-        let (update_recv, work_req) =
-            work_handler::create_work_handler(render_settings.num_threads);
+        let (update_recv, work_req) = work_handler::create_work_handler(
+            NonZeroUsize::new(render_settings.num_threads).unwrap(),
+        );
 
         // apply options
         if render_settings.disable_shading_normals {
@@ -380,7 +474,7 @@ impl App {
             display_settings: false,
         };
 
-        a.init();
+        a.init(overrides);
         if a.render_settings.samples != 0 {
             a.work_req
                 .send(ComputeChange::WorkSamples(
@@ -392,12 +486,8 @@ impl App {
         }
         a
     }
-    fn init(&mut self) {
+    fn init(&mut self, overrides: Overrides) {
         let rs = &mut self.render_settings;
-        assert!(rs.u_low >= 0.0);
-        assert!(rs.u_high >= rs.u_low && rs.u_low <= 1.0);
-        assert!(rs.v_low >= 0.0);
-        assert!(rs.v_high >= rs.v_low && rs.v_low <= 1.0);
 
         self.canvas =
             vec![Vec3::ZERO; u32::from(rs.width) as usize * u32::from(rs.height) as usize];
@@ -412,16 +502,22 @@ impl App {
             )
         };
 
-        if let Some(ref path) = rs.environment_map {
-            if let Ok(image) = TextureData::from_path(path) {
+        if !rs.environment_map.is_empty() {
+            if let Ok(image) = TextureData::from_path(&rs.environment_map) {
                 *envmap = EnvMap::Image(image);
                 log::info!("Loaded envmap");
             } else {
-                log::warn!("Could not import envmap {path}.");
+                log::warn!("Could not import envmap {}.", rs.environment_map);
             }
         }
 
-        *cam = unsafe { crate::scene::setup_scene(&rs) };
+        // setup scene
+        unsafe {
+            let cams = loader::load_gltf(&rs.glb_filepath, rs, &overrides);
+            // TODO: proper camera management
+            *cam = cams[0].clone();
+        }
+
         *bvh = Bvh::new(tris);
 
         // calculate samplable objects after BVH rearranges TRIANGLES

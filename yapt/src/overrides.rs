@@ -32,67 +32,16 @@ impl TryFrom<&JsonValue> for Quat {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
-pub enum IntegratorType {
-    Naive,
-    #[default]
-    NEE,
-}
-#[derive(Debug, PartialEq)]
-pub struct RenderSettings {
-    pub bvh_heatmap: bool,
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
-    pub samples: u64,
-    pub filepath: String,
-    pub output_filename: String,
-    pub integrator: IntegratorType,
-    pub pssmlt: bool,
-    pub environment_map: String,
-    pub u_low: f32,
-    pub u_high: f32,
-    pub v_low: f32,
-    pub v_high: f32,
-    pub num_threads: usize,
-    pub headless: bool,
-    pub camera: String,
-    pub disable_shading_normals: bool,
-    pub file_hash: String,
-}
+type RenderSettings = crate::InputParameters;
 
-impl Default for RenderSettings {
-    fn default() -> Self {
-        Self {
-            bvh_heatmap: false,
-            width: unsafe { NonZeroU32::new_unchecked(1920) },
-            height: unsafe { NonZeroU32::new_unchecked(1080) },
-            samples: 0,
-            filepath: String::new(),
-            output_filename: String::from("out.png"),
-            integrator: IntegratorType::Naive,
-            pssmlt: false,
-            environment_map: String::new(),
-            u_low: 0.0,
-            u_high: 1.0,
-            v_low: 0.0,
-            v_high: 1.0,
-            num_threads: 0,
-            headless: false,
-            camera: String::from("0"),
-            disable_shading_normals: false,
-            file_hash: String::new(),
-        }
-    }
-}
-
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum TexIdentifier {
     #[default]
     Default,
     Name(String),
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum MatType {
     #[default]
     Default,
@@ -104,7 +53,7 @@ pub enum MatType {
     Invisible,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum TexOverride {
     #[default]
     Default,
@@ -113,21 +62,21 @@ pub enum TexOverride {
     Rgb(Vec3),
 }
 
-#[derive(Debug, Default, PartialEq, new)]
+#[derive(Debug, Clone, Default, PartialEq, new)]
 pub struct MatOverride {
-    mtype: MatType,
+    pub mtype: MatType,
     // matte
-    albedo: TexIdentifier,
+    pub albedo: TexIdentifier,
     // light
-    irradiance: Option<Vec3>, // possibly TexIdentifier in future
+    pub irradiance: Option<Vec3>, // possibly TexIdentifier in future
     // metallic
-    roughness: TexIdentifier,
-    ior_tex: TexIdentifier,
+    pub roughness: TexIdentifier,
+    pub ior_tex: TexIdentifier,
     // refractive
-    ior: Option<f64>, // possibly TexIdentifier in future
+    pub ior: Option<f64>, // possibly TexIdentifier in future
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum MatIdentifier {
     #[default]
     Default,
@@ -135,14 +84,14 @@ pub enum MatIdentifier {
     Name(String),
 }
 
-#[derive(Debug, Default, PartialEq, new)]
+#[derive(Debug, Clone, Default, PartialEq, new)]
 pub struct CamOverride {
     pos: Option<Vec3>,
     rot: Option<Rot>,
     hfov: Option<f64>,
 }
 
-#[derive(Debug, PartialEq, new)]
+#[derive(Debug, Clone, PartialEq, new)]
 pub struct MeshOverride {
     pub material: MatIdentifier,
     pub offset: Vec3,
@@ -161,7 +110,7 @@ impl Default for MeshOverride {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Rot {
     #[default]
     Identity,
@@ -169,26 +118,27 @@ pub enum Rot {
     Euler(Vec3),
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Overrides {
-    render_settings: RenderSettings,
-    cam: HashMap<String, CamOverride>,
-    mat: HashMap<String, MatOverride>,
-    mesh: HashMap<String, MeshOverride>,
-    tex: HashMap<String, TexOverride>,
+    pub cam: HashMap<String, CamOverride>,
+    pub mat: HashMap<String, MatOverride>,
+    pub mesh: HashMap<String, MeshOverride>,
+    pub tex: HashMap<String, TexOverride>,
 }
 
-fn load_overrides_file(overrides: &mut Overrides, source: String) {
+pub fn load_overrides_file(source: String, render_settings: &mut RenderSettings) -> Overrides {
+    let mut overrides = Overrides::default();
     let mut string = String::new();
     std::fs::File::open(source)
         .unwrap()
         .read_to_string(&mut string)
         .unwrap();
-    load_overrides(overrides, &string)
+    load_overrides(&mut overrides, render_settings, &string);
+    overrides
 }
 
 // assuming flat layout
-fn load_overrides(overrides: &mut Overrides, source: &str) {
+fn load_overrides(overrides: &mut Overrides, render_settings: &mut RenderSettings, source: &str) {
     let json = json::parse(source).unwrap();
 
     // top level object should always be an object
@@ -197,7 +147,7 @@ fn load_overrides(overrides: &mut Overrides, source: &str) {
         exit(0);
     };
 
-    parse_render_settings(&mut overrides.render_settings, &obj);
+    parse_render_settings(render_settings, &obj);
 
     // parse top level objects (tex.name1, cam.0, mesh.name1, ect)
     for (name, obj) in obj.iter().filter_map(|(name, val)| {
@@ -215,115 +165,136 @@ fn load_overrides(overrides: &mut Overrides, source: &str) {
 }
 
 fn parse_render_settings(render_settings: &mut RenderSettings, obj: &Object) {
-    let int = obj["integrator"]
-        .as_str()
-        .map(|v| v.to_lowercase().trim().to_owned());
-    match int.as_ref().map(|v| &v[..]) {
-        Some("nee") => render_settings.integrator = IntegratorType::NEE,
-        Some("naive") => render_settings.integrator = IntegratorType::Naive,
-        Some(v) => {
-            log::error!("unknown integrator{v}");
-            exit(0);
+    if render_settings.integrator.is_none() {
+        let int = obj["integrator"]
+            .as_str()
+            .map(|v| v.to_lowercase().trim().to_owned());
+        match int.as_ref().map(|v| &v[..]) {
+            Some("nee") => render_settings.integrator = Some(IntegratorType::NEE),
+            Some("naive") => render_settings.integrator = Some(IntegratorType::Naive),
+            Some(v) => {
+                log::error!("unknown integrator{v}");
+                exit(0);
+            }
+            None => {}
         }
-        None => {}
     }
+
     if let Some(path) = obj["filepath"].as_str() {
-        render_settings.filepath = path.to_owned();
+        if render_settings.glb_filepath.is_empty() {
+            render_settings.glb_filepath = path.to_owned();
+        }
     }
     if let Some(path) = obj["output_filename"].as_str() {
-        render_settings.output_filename = path.to_owned();
+        if render_settings.output_filename.is_empty() {
+            render_settings.output_filename = path.to_owned();
+        }
     }
     if let Some(hash) = obj["expected_hash"].as_str() {
         render_settings.file_hash = hash.to_owned();
     }
-    if let Some(name) = obj["camera"].as_str() {
-        render_settings.camera = name.to_owned();
-    } else if let Some(n) = obj["camera"].as_usize() {
-        render_settings.camera = format!("{n}");
-    }
-    if let Some(num) = obj["width"].as_u32() {
-        if num == 0 {
-            log::error!("Width cannot be 0!");
-            exit(0);
+    if render_settings.camera.is_empty() {
+        if let Some(name) = obj["camera"].as_str() {
+            render_settings.camera = name.to_owned();
+        } else if let Some(n) = obj["camera"].as_usize() {
+            render_settings.camera = format!("{n}");
         }
-
-        let Some(w) = NonZeroU32::new(num) else {
-            log::error!("Invalid width: {num}");
-            exit(0);
-        };
-
-        render_settings.width = w;
     }
-    if let Some(num) = obj["width"].as_u32() {
-        let Some(w) = NonZeroU32::new(num) else {
-            log::error!("width cannot be 0!");
-            exit(0);
-        };
-        render_settings.width = w;
+    if render_settings.width.is_none() {
+        if let Some(num) = obj["width"].as_u32() {
+            let Some(w) = NonZeroU32::new(num) else {
+                log::error!("width cannot be 0!");
+                exit(0);
+            };
+            render_settings.width = Some(w);
+        }
     }
-    if let Some(num) = obj["height"].as_u32() {
-        let Some(h) = NonZeroU32::new(num) else {
-            log::error!("height cannot be 0!");
-            exit(0);
-        };
-        render_settings.height = h;
+    if render_settings.height.is_none() {
+        if let Some(num) = obj["height"].as_u32() {
+            let Some(h) = NonZeroU32::new(num) else {
+                log::error!("height cannot be 0!");
+                exit(0);
+            };
+            render_settings.height = Some(h);
+        }
     }
 
     if let Some(num) = obj["samples"].as_u64() {
-        render_settings.samples = num;
+        if render_settings.samples.is_none() {
+            render_settings.samples = Some(num);
+        }
     }
 
     if let Some(heatmap) = obj["heatmap"].as_bool() {
-        render_settings.bvh_heatmap = heatmap;
+        if render_settings.bvh_heatmap.is_none() {
+            render_settings.bvh_heatmap = Some(heatmap);
+        }
     }
     if let Some(headless) = obj["headless"].as_bool() {
-        render_settings.headless = headless;
+        if render_settings.headless.is_none() {
+            render_settings.headless = Some(headless);
+        }
     }
 
     if let Some(pssmlt) = obj["pssmlt"].as_bool() {
-        render_settings.pssmlt = pssmlt;
+        if render_settings.pssmlt.is_none() {
+            render_settings.pssmlt = Some(pssmlt);
+        }
     }
 
     if let Some(b) = obj["disable_shading_normals"].as_bool() {
-        render_settings.disable_shading_normals = b;
+        if render_settings.disable_shading_normals.is_none() {
+            render_settings.disable_shading_normals = Some(b);
+        }
     }
 
     if let Some(env) = obj["env_map"].as_str() {
-        render_settings.environment_map = env.to_owned();
+        if render_settings.environment_map.is_empty() {
+            render_settings.environment_map = env.to_owned();
+        }
     }
 
-    if let Some(ulow) = obj["u_low"].as_f32() {
-        if !(0.0..=1.0).contains(&ulow) {
-            log::error!("u_low must be between 0 and 1!");
-            exit(0);
+    if render_settings.u_low.is_none() {
+        if let Some(ulow) = obj["u_low"].as_f32() {
+            if !(0.0..=1.0).contains(&ulow) {
+                log::error!("u_low must be between 0 and 1!");
+                exit(0);
+            }
+            render_settings.u_low = Some(ulow);
         }
-        render_settings.u_low = ulow;
     }
-    if let Some(uhigh) = obj["u_high"].as_f32() {
-        if !(0.0..=1.0).contains(&uhigh) {
-            log::error!("u_high must be between 0 and 1!");
-            exit(0);
+    if render_settings.u_high.is_none() {
+        if let Some(uhigh) = obj["u_high"].as_f32() {
+            if !(0.0..=1.0).contains(&uhigh) {
+                log::error!("u_high must be between 0 and 1!");
+                exit(0);
+            }
+            render_settings.u_high = Some(uhigh);
         }
-        render_settings.u_high = uhigh;
     }
-    if let Some(vlow) = obj["v_low"].as_f32() {
-        if !(0.0..=1.0).contains(&vlow) {
-            log::error!("v_low mvst be between 0 and 1!");
-            exit(0);
+    if render_settings.v_low.is_none() {
+        if let Some(vlow) = obj["v_low"].as_f32() {
+            if !(0.0..=1.0).contains(&vlow) {
+                log::error!("v_low mvst be between 0 and 1!");
+                exit(0);
+            }
+            render_settings.v_low = Some(vlow);
         }
-        render_settings.v_low = vlow;
     }
-    if let Some(vhigh) = obj["v_high"].as_f32() {
-        if !(0.0..=1.0).contains(&vhigh) {
-            log::error!("v_high mvst be between 0 and 1!");
-            exit(0);
+    if render_settings.v_high.is_none() {
+        if let Some(vhigh) = obj["v_high"].as_f32() {
+            if !(0.0..=1.0).contains(&vhigh) {
+                log::error!("v_high mvst be between 0 and 1!");
+                exit(0);
+            }
+            render_settings.v_high = Some(vhigh);
         }
-        render_settings.v_high = vhigh;
     }
     if let Some(threads) = obj["threads"].as_usize() {
-        render_settings.num_threads = threads;
+        if render_settings.num_threads.is_none() {
+            render_settings.num_threads = Some(threads);
+        }
     }
-    // TODO: rest
 }
 
 fn parse_mat_override(mat_overrides: &mut HashMap<String, MatOverride>, name: &str, obj: &Object) {
@@ -458,10 +429,11 @@ mod tests {
 
     use super::*;
 
-    fn load_overrides(source: &str) -> Overrides {
+    fn load_overrides(source: &str) -> (Overrides, RenderSettings) {
         let mut overrides = Overrides::default();
-        super::load_overrides(&mut overrides, source);
-        overrides
+        let mut render_settings = RenderSettings::default();
+        super::load_overrides(&mut overrides, &mut render_settings, source);
+        (overrides, render_settings)
     }
 
     #[test]
@@ -476,7 +448,7 @@ mod tests {
             mesh,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
 
     #[test]
@@ -496,7 +468,7 @@ mod tests {
             mesh,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
 
     #[test]
@@ -517,7 +489,7 @@ mod tests {
             mesh,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
 
     #[test]
@@ -529,7 +501,7 @@ mod tests {
             tex,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn tex_path() {
@@ -545,7 +517,7 @@ mod tests {
             tex,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn tex_data() {
@@ -560,7 +532,7 @@ mod tests {
             tex,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_invisible() {
@@ -581,7 +553,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_diffuse() {
@@ -613,7 +585,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_metallic() {
@@ -646,7 +618,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_glass() {
@@ -679,7 +651,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_light() {
@@ -712,7 +684,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn mat_glossy() {
@@ -734,7 +706,7 @@ mod tests {
             mat,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn cam() {
@@ -757,63 +729,63 @@ mod tests {
             cam,
             ..Default::default()
         };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).0, expected);
     }
     #[test]
     fn render_settings() {
         const TEST: &str = r#"{"filepath": "waaaaa.glb", "integrator": "nee", "output_filename": "test.png", "width": 1024, "height": 1024, "samples": 100, "headless": true, "camera": 1, "disable_shading_normals": true, "expected_hash": "abcd", "u_low": 0.1, "u_high": 0.5, "v_low": 0.2, "v_high": 0.6, "threads": 16, "heatmap": true, "pssmlt": true, "env_map": "res/env.exr"}"#;
         let render_settings = unsafe {
             RenderSettings {
-                filepath: String::from("waaaaa.glb"),
-                integrator: IntegratorType::NEE,
+                glb_filepath: String::from("waaaaa.glb"),
+                integrator: Some(IntegratorType::NEE),
                 output_filename: String::from("test.png"),
                 environment_map: String::from("res/env.exr"),
-                width: NonZeroU32::new_unchecked(1024),
-                height: NonZeroU32::new_unchecked(1024),
-                samples: 100,
-                headless: true,
+                width: Some(NonZeroU32::new_unchecked(1024)),
+                height: Some(NonZeroU32::new_unchecked(1024)),
+                samples: Some(100),
+                headless: Some(true),
                 camera: String::from("1"),
-                disable_shading_normals: true,
-                pssmlt: true,
-                bvh_heatmap: true,
+                disable_shading_normals: Some(true),
+                pssmlt: Some(true),
+                bvh_heatmap: Some(true),
                 file_hash: String::from("abcd"),
-                u_low: 0.1,
-                u_high: 0.5,
-                v_low: 0.2,
-                v_high: 0.6,
-                num_threads: 16,
+                u_low: Some(0.1),
+                u_high: Some(0.5),
+                v_low: Some(0.2),
+                v_high: Some(0.6),
+                num_threads: Some(16),
+                help: None,
+                scene: String::new(),
             }
         };
-        let expected = Overrides {
-            render_settings,
-            ..Default::default()
-        };
-        assert_eq!(load_overrides(TEST), expected);
+        assert_eq!(load_overrides(TEST).1, render_settings);
     }
     #[test]
     fn full_load() {
         let render_settings = unsafe {
             RenderSettings {
-                filepath: String::from("res/test.glb"),
-                integrator: IntegratorType::NEE,
+                glb_filepath: String::from("res/test.glb"),
+                integrator: Some(IntegratorType::NEE),
                 output_filename: String::from("test.png"),
                 environment_map: String::from("res/env.exr"),
-                width: NonZeroU32::new_unchecked(1024),
-                height: NonZeroU32::new_unchecked(1024),
-                samples: 100,
-                headless: true,
+                width: Some(NonZeroU32::new_unchecked(1024)),
+                height: Some(NonZeroU32::new_unchecked(1024)),
+                samples: Some(100),
+                headless: Some(true),
                 camera: String::from("1"),
-                disable_shading_normals: true,
-                pssmlt: true,
-                bvh_heatmap: true,
+                disable_shading_normals: Some(true),
+                pssmlt: Some(true),
+                bvh_heatmap: Some(true),
                 file_hash: String::from(
                     "ceb56db724d9ba50f0ce9b1081ddb22570348b2dc90749622a1ec8b38f6b0963",
                 ),
-                u_low: 0.1,
-                u_high: 0.5,
-                v_low: 0.2,
-                v_high: 0.6,
-                num_threads: 32,
+                u_low: Some(0.1),
+                u_high: Some(0.5),
+                v_low: Some(0.2),
+                v_high: Some(0.6),
+                num_threads: Some(32),
+                help: None,
+                scene: String::new(),
             }
         };
         let mut mesh = HashMap::new();
@@ -910,10 +882,9 @@ mod tests {
             mat,
             tex,
             cam,
-            render_settings,
             ..Default::default()
         };
-        assert_eq!(load_overrides(BIG_TEST), expected);
+        assert_eq!(load_overrides(BIG_TEST), (expected, render_settings));
     }
     const BIG_TEST: &str = r#"
 {
