@@ -5,6 +5,7 @@ use json::JsonValue;
 use std::collections::HashMap;
 use std::io::Read;
 use std::num::NonZeroU32;
+use std::path::Path;
 use std::process::exit;
 
 type Quat = Quaternion;
@@ -129,11 +130,29 @@ pub struct Overrides {
 pub fn load_overrides_file(source: String, render_settings: &mut RenderSettings) -> Overrides {
     let mut overrides = Overrides::default();
     let mut string = String::new();
-    std::fs::File::open(source)
+    std::fs::File::open(&source)
         .unwrap()
         .read_to_string(&mut string)
         .unwrap();
     load_overrides(&mut overrides, render_settings, &string);
+
+    let relative_to_scene = |filepath: &mut String| {
+        // use relative path to scene file if not absolute
+        if !filepath.is_empty() && !Path::new(filepath).has_root() {
+            let mut relative_to_scene = Path::new(&source).parent().unwrap().to_owned();
+            relative_to_scene.push(&filepath);
+            *filepath = relative_to_scene
+                .canonicalize()
+                .unwrap()
+                .into_os_string()
+                .into_string()
+                .unwrap();
+        }
+    };
+
+    relative_to_scene(&mut render_settings.glb_filepath);
+    relative_to_scene(&mut render_settings.environment_map);
+
     overrides
 }
 
