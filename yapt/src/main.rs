@@ -160,7 +160,10 @@ fn main() {
 
     let mut args2 = InputParameters::parse();
 
-    let overrides = overrides::load_overrides_file(args2.scene.clone(), &mut args2);
+    let overrides = dbg!(overrides::load_overrides_file(
+        args2.scene.clone(),
+        &mut args2
+    ));
     let rs: MainRenderSettings = args2.into();
 
     // GUI mode

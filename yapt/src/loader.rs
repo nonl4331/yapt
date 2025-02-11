@@ -188,6 +188,12 @@ pub unsafe fn load_gltf(
                         mat_name = name;
                     }
 
+                    // skip @ material level
+                    if let Some(MatType::Invisible) = overrides.mat.get(&mat_name).map(|v| v.mtype)
+                    {
+                        continue;
+                    }
+
                     let idx = if !mat_names.contains_key(&mat_name) {
                         let idx = mats.len();
                         mats.push(
@@ -421,7 +427,7 @@ fn mat_to_mat(
             );
 
             let mut metallic_roughness = format!("{mat_name}.metallic_roughness");
-            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.roughness.clone()) {
                 log::info!("Found override for {metallic_roughness}");
                 metallic_roughness = name;
             }

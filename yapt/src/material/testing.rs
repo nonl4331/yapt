@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicU8;
     use std::sync::atomic::Ordering::SeqCst;
-    pub static LOADED_DATA: AtomicBool = AtomicBool::new(false);
+    pub static LOADED_DATA: AtomicU8 = AtomicU8::new(0);
     use rand::thread_rng;
 
     const ONE_TEX: usize = 0;
@@ -10,11 +10,18 @@ mod tests {
     const RAND_TEX: usize = 2;
 
     fn init_test() {
-        if LOADED_DATA.load(SeqCst) {
+        if LOADED_DATA.load(SeqCst) == 2 {
             return;
         }
-        LOADED_DATA.store(true, SeqCst);
-        logging_init();
+        while LOADED_DATA.load(SeqCst) == 1 {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        LOADED_DATA.store(1, SeqCst);
+        env_logger::Builder::new()
+            .filter_level(log::LevelFilter::Info)
+            .parse_default_env()
+            .is_test(true)
+            .init();
         unsafe {
             use crate::loader::add_texture;
             let mut rng = rand::thread_rng();
@@ -26,14 +33,7 @@ mod tests {
             let rand = add_texture("", Texture::Solid(Vec3::Y * rng.gen()));
             assert_eq!(rand, RAND_TEX);
         }
-    }
-
-    fn logging_init() {
-        let _ = env_logger::Builder::new()
-            .filter_level(log::LevelFilter::Info)
-            .parse_default_env()
-            .is_test(true)
-            .try_init();
+        LOADED_DATA.store(2, SeqCst);
     }
 
     const THETA_BINS: usize = 180;

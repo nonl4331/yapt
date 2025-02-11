@@ -26,7 +26,7 @@ impl Naive {
 
             let mat = &mats[sect.mat];
 
-            let wo = ray.dir;
+            let wo = -ray.dir;
 
             rgb += mat.le() * tp;
 
@@ -38,7 +38,7 @@ impl Naive {
             }
 
             // by convention both wo and wi point away from the surface
-            tp *= mat.eval(&sect, wo, -ray.dir);
+            tp *= mat.eval(&sect, wo, ray.dir);
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
@@ -50,7 +50,7 @@ impl Naive {
         }
         if rgb.contains_nan() {
             log::warn!("NAN encountered!");
-            return (Vec3::ZERO, 0);
+            return (Vec3::X, 0);
         }
         (rgb, depth)
     }
@@ -92,7 +92,7 @@ impl NEEMIS {
             return (rgb, 1);
         }
 
-        let mut wo = ray.dir;
+        let mut wo = -ray.dir;
 
         for depth in 1..MAX_DEPTH {
             // ----
@@ -118,11 +118,11 @@ impl NEEMIS {
 
                 // add light contribution if path is reachable by bsdf
                 // by convention both wo and wi point away from the surface
-                let light_bsdf_pdf = mat.spdf(&sect, wo, -light_ray.dir);
+                let light_bsdf_pdf = mat.spdf(&sect, wo, light_ray.dir);
                 if light_bsdf_pdf != 0.0 && light_pdf != 0.0 {
                     rgb += tp
                         * power_heuristic(light_pdf, light_bsdf_pdf)
-                        * mat.bxdf_cos(&sect, wo, -light_ray.dir)
+                        * mat.bxdf_cos(&sect, wo, light_ray.dir)
                         * light_le
                         / light_pdf;
                 }
@@ -151,7 +151,7 @@ impl NEEMIS {
             // hit samplable calculate weight
             if samplable.contains(&new_sect.id) && !status.contains(ScatterStatus::DIRAC_DELTA) {
                 // by convention both wo and wi point away from the surface
-                let bsdf_pdf = mat.spdf(&sect, wo, -ray.dir);
+                let bsdf_pdf = mat.spdf(&sect, wo, ray.dir);
                 let bsdf_light_pdf = tris[new_sect.id].pdf(&new_sect, &ray) * inverse_samplable;
                 rgb += tp * power_heuristic(bsdf_pdf, bsdf_light_pdf) * new_mat.le();
             } else {
