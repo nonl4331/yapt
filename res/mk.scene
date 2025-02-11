@@ -1,6 +1,6 @@
 {
-	"filepath": "res/mitsuba_knob.glb",
-	"env_map": "res/mitsuba_env.exr",
+	"filepath": "mitsuba_knob.glb",
+	"env_map": "mitsuba_env.exr",
 	"width": 1440,
 	"height": 1440,
 	"samples": 1000,
