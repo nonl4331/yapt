@@ -33,8 +33,6 @@ impl TryFrom<&JsonValue> for Quat {
     }
 }
 
-type RenderSettings = crate::InputParameters;
-
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum TexIdentifier {
     #[default]
@@ -127,9 +125,10 @@ pub struct Overrides {
     pub tex: HashMap<String, TexOverride>,
 }
 
-pub fn load_overrides_file(source: String, render_settings: &mut RenderSettings) -> Overrides {
+pub fn load_overrides_file(render_settings: &mut InputParameters) -> Overrides {
     let mut overrides = Overrides::default();
     let mut string = String::new();
+    let source = render_settings.overrides.clone();
     std::fs::File::open(&source)
         .unwrap()
         .read_to_string(&mut string)
@@ -150,14 +149,14 @@ pub fn load_overrides_file(source: String, render_settings: &mut RenderSettings)
         }
     };
 
-    relative_to_scene(&mut render_settings.glb_filepath);
-    relative_to_scene(&mut render_settings.environment_map);
+    relative_to_scene(&mut render_settings.scene_filepath);
+    relative_to_scene(&mut render_settings.env_map);
 
     overrides
 }
 
 // assuming flat layout
-fn load_overrides(overrides: &mut Overrides, render_settings: &mut RenderSettings, source: &str) {
+fn load_overrides(overrides: &mut Overrides, render_settings: &mut InputParameters, source: &str) {
     let json = json::parse(source).unwrap();
 
     // top level object should always be an object
@@ -183,7 +182,7 @@ fn load_overrides(overrides: &mut Overrides, render_settings: &mut RenderSetting
     }
 }
 
-fn parse_render_settings(render_settings: &mut RenderSettings, obj: &Object) {
+fn parse_render_settings(render_settings: &mut InputParameters, obj: &Object) {
     if render_settings.integrator.is_none() {
         let int = obj["integrator"]
             .as_str()
@@ -199,9 +198,9 @@ fn parse_render_settings(render_settings: &mut RenderSettings, obj: &Object) {
         }
     }
 
-    if let Some(path) = obj["filepath"].as_str() {
-        if render_settings.glb_filepath.is_empty() {
-            render_settings.glb_filepath = path.to_owned();
+    if let Some(path) = obj["scene"].as_str() {
+        if render_settings.scene_filepath.is_empty() {
+            render_settings.scene_filepath = path.to_owned();
         }
     }
     if let Some(path) = obj["output_filename"].as_str() {
@@ -209,8 +208,11 @@ fn parse_render_settings(render_settings: &mut RenderSettings, obj: &Object) {
             render_settings.output_filename = path.to_owned();
         }
     }
-    if let Some(hash) = obj["expected_hash"].as_str() {
-        render_settings.file_hash = hash.to_owned();
+    if let Some(hash) = obj["scene_hash"].as_str() {
+        render_settings.scene_hash = hash.to_owned();
+    }
+    if let Some(hash) = obj["env_hash"].as_str() {
+        render_settings.env_hash = hash.to_owned();
     }
     if render_settings.camera.is_empty() {
         if let Some(name) = obj["camera"].as_str() {
@@ -268,8 +270,8 @@ fn parse_render_settings(render_settings: &mut RenderSettings, obj: &Object) {
     }
 
     if let Some(env) = obj["env_map"].as_str() {
-        if render_settings.environment_map.is_empty() {
-            render_settings.environment_map = env.to_owned();
+        if render_settings.env_map.is_empty() {
+            render_settings.env_map = env.to_owned();
         }
     }
 
@@ -448,9 +450,9 @@ mod tests {
 
     use super::*;
 
-    fn load_overrides(source: &str) -> (Overrides, RenderSettings) {
+    fn load_overrides(source: &str) -> (Overrides, InputParameters) {
         let mut overrides = Overrides::default();
-        let mut render_settings = RenderSettings::default();
+        let mut render_settings = InputParameters::default();
         super::load_overrides(&mut overrides, &mut render_settings, source);
         (overrides, render_settings)
     }
@@ -752,13 +754,13 @@ mod tests {
     }
     #[test]
     fn render_settings() {
-        const TEST: &str = r#"{"filepath": "waaaaa.glb", "integrator": "nee", "output_filename": "test.png", "width": 1024, "height": 1024, "samples": 100, "headless": true, "camera": 1, "disable_shading_normals": true, "expected_hash": "abcd", "u_low": 0.1, "u_high": 0.5, "v_low": 0.2, "v_high": 0.6, "threads": 16, "heatmap": true, "pssmlt": true, "env_map": "res/env.exr"}"#;
+        const TEST: &str = r#"{"scene": "waaaaa.glb", "integrator": "nee", "output_filename": "test.png", "width": 1024, "height": 1024, "samples": 100, "headless": true, "camera": 1, "disable_shading_normals": true, "scene_hash": "abcd", "env_hash": "efgh", "u_low": 0.1, "u_high": 0.5, "v_low": 0.2, "v_high": 0.6, "threads": 16, "heatmap": true, "pssmlt": true, "env_map": "env.exr"}"#;
         let render_settings = unsafe {
-            RenderSettings {
-                glb_filepath: String::from("waaaaa.glb"),
+            InputParameters {
+                scene_filepath: String::from("waaaaa.glb"),
                 integrator: Some(IntegratorType::NEE),
                 output_filename: String::from("test.png"),
-                environment_map: String::from("res/env.exr"),
+                env_map: String::from("env.exr"),
                 width: Some(NonZeroU32::new_unchecked(1024)),
                 height: Some(NonZeroU32::new_unchecked(1024)),
                 samples: Some(100),
@@ -767,14 +769,15 @@ mod tests {
                 disable_shading_normals: Some(true),
                 pssmlt: Some(true),
                 bvh_heatmap: Some(true),
-                file_hash: String::from("abcd"),
+                scene_hash: String::from("abcd"),
+                env_hash: String::from("efgh"),
                 u_low: Some(0.1),
                 u_high: Some(0.5),
                 v_low: Some(0.2),
                 v_high: Some(0.6),
                 num_threads: Some(16),
                 help: None,
-                scene: String::new(),
+                overrides: String::new(),
             }
         };
         assert_eq!(load_overrides(TEST).1, render_settings);
@@ -782,11 +785,11 @@ mod tests {
     #[test]
     fn full_load() {
         let render_settings = unsafe {
-            RenderSettings {
-                glb_filepath: String::from("res/test.glb"),
+            InputParameters {
+                scene_filepath: String::from("test.glb"),
                 integrator: Some(IntegratorType::NEE),
                 output_filename: String::from("test.png"),
-                environment_map: String::from("res/env.exr"),
+                env_map: String::from("env.exr"),
                 width: Some(NonZeroU32::new_unchecked(1024)),
                 height: Some(NonZeroU32::new_unchecked(1024)),
                 samples: Some(100),
@@ -795,8 +798,11 @@ mod tests {
                 disable_shading_normals: Some(true),
                 pssmlt: Some(true),
                 bvh_heatmap: Some(true),
-                file_hash: String::from(
+                scene_hash: String::from(
                     "ceb56db724d9ba50f0ce9b1081ddb22570348b2dc90749622a1ec8b38f6b0963",
+                ),
+                env_hash: String::from(
+                    "9ef9eb7f373ac6523e64cd003fea41320451958b25ff6cfdc894227240e006f1",
                 ),
                 u_low: Some(0.1),
                 u_high: Some(0.5),
@@ -804,7 +810,7 @@ mod tests {
                 v_high: Some(0.6),
                 num_threads: Some(32),
                 help: None,
-                scene: String::new(),
+                overrides: String::new(),
             }
         };
         let mut mesh = HashMap::new();
@@ -907,10 +913,10 @@ mod tests {
     }
     const BIG_TEST: &str = r#"
 {
-    "filepath": "res/test.glb",
+    "scene": "test.glb",
     "integrator": "nee",
     "output_filename": "test.png",
-    "env_map": "res/env.exr",
+    "env_map": "env.exr",
     "u_low": 0.1,
     "u_high": 0.5,
     "v_low": 0.2,
@@ -924,7 +930,8 @@ mod tests {
     "width": 1024,
     "height": 1024,
     "samples": 100,
-    "expected_hash": "ceb56db724d9ba50f0ce9b1081ddb22570348b2dc90749622a1ec8b38f6b0963",
+    "scene_hash": "ceb56db724d9ba50f0ce9b1081ddb22570348b2dc90749622a1ec8b38f6b0963",
+    "env_hash": "9ef9eb7f373ac6523e64cd003fea41320451958b25ff6cfdc894227240e006f1",
 
     "mesh.robot": {
         "visible": false

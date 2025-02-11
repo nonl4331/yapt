@@ -13,10 +13,10 @@ mod tests {
         if LOADED_DATA.load(SeqCst) == 2 {
             return;
         }
-        while LOADED_DATA.load(SeqCst) == 1 {
+        if LOADED_DATA.swap(1, SeqCst) == 1 {
             std::thread::sleep(std::time::Duration::from_millis(1));
+            return;
         }
-        LOADED_DATA.store(1, SeqCst);
         env_logger::Builder::new()
             .filter_level(log::LevelFilter::Info)
             .parse_default_env()

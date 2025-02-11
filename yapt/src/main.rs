@@ -28,9 +28,10 @@ pub mod work_handler;
 pub mod prelude {
     pub use crate::{
         camera::Cam, coord::*, envmap::*, feature_enabled, integrator::*, loader, material::*,
-        pssmlt::MinRng, texture::*, triangle::Tri, work_handler::*, IntegratorType, Intersection,
-        Splat, BVH, CAM, DISABLE_SHADING_NORMALS, ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES,
-        NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES, TRIANGLES, UVS, VERTICES, WIDTH,
+        pssmlt::MinRng, texture::*, triangle::Tri, work_handler::*, InputParameters,
+        IntegratorType, Intersection, RenderSettings, Splat, BVH, CAM, DISABLE_SHADING_NORMALS,
+        ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES,
+        TRIANGLES, UVS, VERTICES, WIDTH,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -158,13 +159,10 @@ impl Intersection {
 fn main() {
     create_logger();
 
-    let mut args2 = InputParameters::parse();
+    let mut args = InputParameters::parse();
 
-    let overrides = dbg!(overrides::load_overrides_file(
-        args2.scene.clone(),
-        &mut args2
-    ));
-    let rs: MainRenderSettings = args2.into();
+    let overrides = overrides::load_overrides_file(&mut args);
+    let rs: RenderSettings = args.into();
 
     // GUI mode
     #[cfg(feature = "gui")]
@@ -280,13 +278,13 @@ pub struct InputParameters {
     #[arg(short = 'n', long)]
     samples: Option<u64>,
     #[arg(short, long, default_value_t=String::new())]
-    glb_filepath: String, // empty == None
+    scene_filepath: String, // empty == None
     #[arg(short, long, default_value_t=String::new())]
     output_filename: String,
     #[arg(short, long)]
     integrator: Option<IntegratorType>,
     #[arg(short, long, default_value_t=String::new())]
-    environment_map: String,
+    env_map: String,
     #[arg(long)]
     u_low: Option<f32>,
     #[arg(long)]
@@ -300,7 +298,9 @@ pub struct InputParameters {
     #[arg(short, long, default_value_t=String::new())]
     camera: String,
     #[arg(short, default_value_t=String::new())]
-    file_hash: String,
+    scene_hash: String,
+    #[arg(short, default_value_t=String::new())]
+    env_hash: String,
     #[arg(short)]
     headless: Option<bool>,
     #[arg(short)]
@@ -308,21 +308,21 @@ pub struct InputParameters {
     #[arg(short)]
     disable_shading_normals: Option<bool>,
     #[arg(short, long, default_value_t=String::new())]
-    scene: String,
+    overrides: String,
     #[arg(long, action = clap::ArgAction::HelpLong)]
     pub help: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct MainRenderSettings {
+pub struct RenderSettings {
     bvh_heatmap: bool,
     width: u32,
     height: u32,
     samples: u64,
-    glb_filepath: String,
+    scene_filepath: String,
     output_filename: String,
     integrator: IntegratorType,
-    environment_map: String,
+    env_map: String,
     u: Vec2,
     v: Vec2,
     num_threads: usize,
@@ -330,19 +330,21 @@ pub struct MainRenderSettings {
     headless: bool,
     pssmlt: bool,
     disable_shading_normals: bool,
-    file_hash: String,
+    scene_hash: String,
+    env_hash: String,
+    overrides: String,
 }
 
-impl From<InputParameters> for MainRenderSettings {
+impl From<InputParameters> for RenderSettings {
     fn from(r: InputParameters) -> Self {
-        // check glb_filepath exists
-        if r.glb_filepath.is_empty() {
-            log::error!("No GLB/GLTF filepath specified.");
+        // check scene_filepath exists
+        if r.scene_filepath.is_empty() {
+            log::error!("No scene filepath specified.");
             exit(0);
         }
 
-        if let Err(e) = std::fs::File::open(&r.glb_filepath) {
-            log::error!("Cannot open glb/gltf @ {}: {e}", r.glb_filepath);
+        if let Err(e) = std::fs::File::open(&r.scene_filepath) {
+            log::error!("Cannot open scene @ {}: {e}", r.scene_filepath);
             exit(0);
         }
 
@@ -396,8 +398,6 @@ impl From<InputParameters> for MainRenderSettings {
             log::info!("Using {num_threads} threads.");
         }
 
-        let file_hash = r.file_hash;
-
         let headless = r.headless.unwrap_or(false);
 
         let pssmlt = r.pssmlt.unwrap_or(false);
@@ -409,10 +409,10 @@ impl From<InputParameters> for MainRenderSettings {
             width,
             height,
             samples,
-            glb_filepath: r.glb_filepath,
+            scene_filepath: r.scene_filepath,
             output_filename: r.output_filename,
             integrator,
-            environment_map: r.environment_map,
+            env_map: r.env_map,
             u,
             v,
             num_threads,
@@ -420,13 +420,15 @@ impl From<InputParameters> for MainRenderSettings {
             headless,
             pssmlt,
             disable_shading_normals,
-            file_hash,
+            scene_hash: r.scene_hash,
+            env_hash: r.env_hash,
+            overrides: r.overrides,
         }
     }
 }
 
 pub struct App {
-    pub render_settings: MainRenderSettings,
+    pub render_settings: RenderSettings,
     // egui state
     #[cfg(feature = "gui")]
     pub egui_state: Option<(egui::Context, egui::TextureHandle)>,
@@ -451,7 +453,7 @@ pub struct App {
 impl App {
     pub fn new(
         #[cfg(feature = "gui")] egui_state: Option<(egui::Context, egui::TextureHandle)>,
-        render_settings: MainRenderSettings,
+        render_settings: RenderSettings,
         overrides: Overrides,
     ) -> Self {
         let (update_recv, work_req) = work_handler::create_work_handler(
@@ -509,18 +511,18 @@ impl App {
             )
         };
 
-        if !rs.environment_map.is_empty() {
-            if let Ok(image) = TextureData::from_path(&rs.environment_map) {
+        if !rs.env_map.is_empty() {
+            if let Ok(image) = TextureData::envmap_from_path(&rs.env_map, &rs.env_hash) {
                 *envmap = EnvMap::Image(image);
                 log::info!("Loaded envmap");
             } else {
-                log::warn!("Could not import envmap {}.", rs.environment_map);
+                log::warn!("Could not import envmap {}.", rs.env_map);
             }
         }
 
         // setup scene
         unsafe {
-            let cams = loader::load_gltf(&rs.glb_filepath, rs, &overrides);
+            let cams = loader::load_gltf(&rs.scene_filepath, rs, &overrides);
             // TODO: proper camera management
             *cam = cams[0].clone();
         }

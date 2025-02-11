@@ -5,7 +5,7 @@ use gltf::Node;
 use crate::{
     overrides::{self, Overrides, TexIdentifier, TexOverride},
     prelude::*,
-    MainRenderSettings,
+    RenderSettings,
 };
 
 pub unsafe fn add_material<A: Into<String>>(names: Vec<A>, material: Mat) {
@@ -45,7 +45,7 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
 
 pub unsafe fn load_gltf(
     path: &str,
-    render_settings: &MainRenderSettings,
+    render_settings: &RenderSettings,
     overrides: &Overrides,
 ) -> Vec<Cam> {
     let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
@@ -61,23 +61,23 @@ pub unsafe fn load_gltf(
 
     let mut cams = Vec::new();
     let gltf_data = std::fs::read(path).unwrap_or_else(|e| {
-        log::error!("Failed to open file @ {path}\n{e}");
+        log::error!("Failed to open scene @ {path}\n{e}");
         std::process::exit(0);
     });
     let data = &gltf_data;
-    if !render_settings.file_hash.is_empty() {
+    if !render_settings.scene_hash.is_empty() {
         let hash = sha256::digest(data);
-        if hash != render_settings.file_hash {
+        if hash != render_settings.scene_hash {
             log::error!(
-                "Expected sha256 hash \"{}\" does not equal sha256 hash of {path} \"{hash}\"",
-                render_settings.file_hash
+                "Expected sha256 scene hash \"{}\" does not equal sha256 scene hash of {path} \"{hash}\"",
+                render_settings.scene_hash
             );
             exit(0);
         }
     }
 
     let (doc, bufs, _) = gltf::import_slice(data).unwrap_or_else(|e| {
-        log::error!("Failed to load gltf @ {path}\n{e}");
+        log::error!("Failed to load scene @ {path}\n{e}");
         std::process::exit(0);
     });
 

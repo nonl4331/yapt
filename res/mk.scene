@@ -1,10 +1,11 @@
 {
-	"filepath": "mitsuba_knob.glb",
+	"scene": "mitsuba_knob.glb",
 	"env_map": "mitsuba_env.exr",
 	"width": 1440,
 	"height": 1440,
 	"samples": 1000,
-	"expected_hash": "cc009bfbfd25f593de5598d445fb70bc228d32b93d0bef2797d5659db53298b7",
+	"scene_hash": "cc009bfbfd25f593de5598d445fb70bc228d32b93d0bef2797d5659db53298b7",
+	"env_hash": "9ef9eb7f373ac6523e64cd003fea41320451958b25ff6cfdc894227240e006f1",
 
 	"mat.case": {
 		"type": "refractive",

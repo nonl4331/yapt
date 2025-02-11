@@ -1,4 +1,4 @@
-use crate::{prelude::*, MainRenderSettings};
+use crate::{prelude::*, RenderSettings};
 
 pub const PLACEHOLDER: Cam = Cam {
     lower_left: Vec3 {
@@ -43,7 +43,7 @@ impl Cam {
         origin: Vec3,
         mut rotation: Vec3,
         hfov: f32,
-        render_settings: &MainRenderSettings,
+        render_settings: &RenderSettings,
         degrees: bool,
     ) -> Self {
         if degrees {
@@ -74,7 +74,7 @@ impl Cam {
         origin: Vec3,
         q: Quaternion,
         hfov: f32,
-        render_settings: &MainRenderSettings,
+        render_settings: &RenderSettings,
     ) -> Self {
         let qp = q.conj();
 
@@ -112,7 +112,7 @@ impl Cam {
         mut up: Vec3,
         hfov: f32,
         focus_dist: f32,
-        render_settings: &MainRenderSettings,
+        render_settings: &RenderSettings,
     ) -> Self {
         let forward = (look_at - origin).normalised();
         up.normalise();
