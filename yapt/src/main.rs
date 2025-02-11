@@ -330,6 +330,7 @@ pub struct MainRenderSettings {
     headless: bool,
     pssmlt: bool,
     disable_shading_normals: bool,
+    file_hash: String,
 }
 
 impl From<InputParameters> for MainRenderSettings {
@@ -395,6 +396,8 @@ impl From<InputParameters> for MainRenderSettings {
             log::info!("Using {num_threads} threads.");
         }
 
+        let file_hash = r.file_hash;
+
         let headless = r.headless.unwrap_or(false);
 
         let pssmlt = r.pssmlt.unwrap_or(false);
@@ -417,6 +420,7 @@ impl From<InputParameters> for MainRenderSettings {
             headless,
             pssmlt,
             disable_shading_normals,
+            file_hash,
         }
     }
 }

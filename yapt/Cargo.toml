@@ -23,6 +23,7 @@ egui = { version = "0.29.1", optional = true }
 num_cpus = "1.16.0"
 gltf = {version = "1.4.1", features = ["import", "names", "utils"] }
 json = "0.12.4"
+sha256 = "1.5.0"
 
 [dev-dependencies]
 GSL = "7.0"

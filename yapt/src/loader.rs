@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process::exit};
 
 use gltf::Node;
 
@@ -60,13 +60,26 @@ pub unsafe fn load_gltf(
     let tex_names = lock_tex.get_mut_or_init(HashMap::new);
 
     let mut cams = Vec::new();
-    let (doc, bufs, _) = match gltf::import(path) {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("Failed to load gltf @ {path}\n{e}");
-            std::process::exit(0);
+    let gltf_data = std::fs::read(path).unwrap_or_else(|e| {
+        log::error!("Failed to open file @ {path}\n{e}");
+        std::process::exit(0);
+    });
+    let data = &gltf_data;
+    if !render_settings.file_hash.is_empty() {
+        let hash = sha256::digest(data);
+        if hash != render_settings.file_hash {
+            log::error!(
+                "Expected sha256 hash \"{}\" does not equal sha256 hash of {path} \"{hash}\"",
+                render_settings.file_hash
+            );
+            exit(0);
         }
-    };
+    }
+
+    let (doc, bufs, _) = gltf::import_slice(data).unwrap_or_else(|e| {
+        log::error!("Failed to load gltf @ {path}\n{e}");
+        std::process::exit(0);
+    });
 
     let Some(scene) = doc.default_scene() else {
         log::error!("No default scene in gltf @ {path}");
