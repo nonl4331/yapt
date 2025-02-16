@@ -51,7 +51,7 @@ use std::{
     sync::Mutex,
 };
 
-use overrides::Overrides;
+use overrides::{CamIdentifier, Overrides};
 use prelude::*;
 
 use clap::Parser;
@@ -73,8 +73,11 @@ pub static MATERIAL_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
     Mutex::new(std::cell::OnceCell::new());
 pub static TEXTURE_NAMES: Mutex<std::cell::OnceCell<HashMap<String, usize>>> =
     Mutex::new(std::cell::OnceCell::new());
+pub static CAMERAS: SyncUnsafeCell<Vec<Cam>> = SyncUnsafeCell::new(vec![]);
 pub static ENVMAP: SyncUnsafeCell<EnvMap> = SyncUnsafeCell::new(EnvMap::DEFAULT);
 pub static CAM: SyncUnsafeCell<Cam> = SyncUnsafeCell::new(crate::camera::PLACEHOLDER);
+pub static CAMERA_MAP: Mutex<std::cell::OnceCell<HashMap<CamIdentifier, usize>>> =
+    Mutex::new(std::cell::OnceCell::new());
 
 pub static OPTIONS: SyncUnsafeCell<u64> = SyncUnsafeCell::new(0);
 pub const DISABLE_SHADING_NORMALS: u64 = 1;
@@ -295,7 +298,7 @@ pub struct InputParameters {
     v_high: Option<f32>,
     #[arg(long)]
     num_threads: Option<usize>,
-    #[arg(short, long, default_value_t=String::new())]
+    #[arg(short, long, default_value_t=String::new(), help = "A leading '_' will be ignored as is used to allow specifing numbers as strings not as an index or an empty string (regular empty string will result in the default camera).")]
     camera: String,
     #[arg(short, default_value_t=String::new())]
     scene_hash: String,
@@ -326,7 +329,7 @@ pub struct RenderSettings {
     u: Vec2,
     v: Vec2,
     num_threads: usize,
-    camera: String,
+    camera: CamIdentifier,
     headless: bool,
     pssmlt: bool,
     disable_shading_normals: bool,
@@ -404,6 +407,17 @@ impl From<InputParameters> for RenderSettings {
 
         let disable_shading_normals = r.disable_shading_normals.unwrap_or(false);
 
+        // empty string means use default
+        let camera = if r.camera.is_empty() {
+            CamIdentifier::Index(0)
+        } else if let Ok(n) = r.camera.parse() {
+            CamIdentifier::Index(n)
+        } else if r.camera.starts_with("_") {
+            CamIdentifier::Name(r.camera[1..].to_owned())
+        } else {
+            CamIdentifier::Name(r.camera.to_owned())
+        };
+
         Self {
             bvh_heatmap,
             width,
@@ -416,7 +430,7 @@ impl From<InputParameters> for RenderSettings {
             u,
             v,
             num_threads,
-            camera: r.camera,
+            camera,
             headless,
             pssmlt,
             disable_shading_normals,
@@ -500,7 +514,7 @@ impl App {
 
         self.canvas =
             vec![Vec3::ZERO; u32::from(rs.width) as usize * u32::from(rs.height) as usize];
-        let (cam, bvh, tris, mats, samplables, envmap) = unsafe {
+        let (cam, bvh, tris, mats, samplables, envmap, cams) = unsafe {
             (
                 CAM.get().as_mut_unchecked(),
                 BVH.get().as_mut_unchecked(),
@@ -508,6 +522,7 @@ impl App {
                 MATERIALS.get().as_mut_unchecked(),
                 SAMPLABLE.get().as_mut_unchecked(),
                 ENVMAP.get().as_mut_unchecked(),
+                CAMERAS.get().as_mut_unchecked(),
             )
         };
 
@@ -522,9 +537,21 @@ impl App {
 
         // setup scene
         unsafe {
-            let cams = loader::load_gltf(&rs.scene_filepath, rs, &overrides);
-            // TODO: proper camera management
-            *cam = cams[0].clone();
+            loader::load_gltf(&rs.scene_filepath, rs, &overrides);
+
+            let cam_lock = CAMERA_MAP.lock().unwrap();
+            let cam_map = cam_lock.get().unwrap();
+
+            let Some(idx) = cam_map.get(&rs.camera) else {
+                if rs.camera == CamIdentifier::Index(0) {
+                    log::error!("The scene contains no cameras!");
+                    exit(0)
+                } else {
+                    log::error!("Camera {:?} does not exit!", rs.camera);
+                    exit(0);
+                }
+            };
+            *cam = cams[*idx].clone();
         }
 
         *bvh = Bvh::new(tris);

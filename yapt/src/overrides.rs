@@ -7,6 +7,7 @@ use std::io::Read;
 use std::num::NonZeroU32;
 use std::path::Path;
 use std::process::exit;
+use std::str::FromStr;
 
 type Quat = Quaternion;
 
@@ -38,6 +39,18 @@ pub enum TexIdentifier {
     #[default]
     Default,
     Name(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CamIdentifier {
+    Index(usize),
+    Name(String),
+}
+
+impl Default for CamIdentifier {
+    fn default() -> Self {
+        Self::Index(0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -88,6 +101,19 @@ pub struct CamOverride {
     pos: Option<Vec3>,
     rot: Option<Rot>,
     hfov: Option<f64>,
+}
+
+impl FromStr for CamIdentifier {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(n) = s.parse() {
+            return Ok(Self::Index(n));
+        }
+        if s.starts_with("_") {
+            return Ok(Self::Name(s[1..].to_owned()));
+        }
+        Ok(Self::Name(s.to_owned()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, new)]
@@ -216,9 +242,9 @@ fn parse_render_settings(render_settings: &mut InputParameters, obj: &Object) {
     }
     if render_settings.camera.is_empty() {
         if let Some(name) = obj["camera"].as_str() {
-            render_settings.camera = name.to_owned();
+            render_settings.camera = format!("_{name}");
         } else if let Some(n) = obj["camera"].as_usize() {
-            render_settings.camera = format!("{n}");
+            render_settings.camera = n.to_string();
         }
     }
     if render_settings.width.is_none() {

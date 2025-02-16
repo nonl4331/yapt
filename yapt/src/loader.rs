@@ -3,9 +3,9 @@ use std::{collections::HashMap, process::exit};
 use gltf::Node;
 
 use crate::{
-    overrides::{self, Overrides, TexIdentifier, TexOverride},
+    overrides::{self, CamIdentifier, Overrides, TexIdentifier, TexOverride},
     prelude::*,
-    RenderSettings,
+    RenderSettings, CAMERAS, CAMERA_MAP,
 };
 
 pub unsafe fn add_material<A: Into<String>>(names: Vec<A>, material: Mat) {
@@ -43,11 +43,7 @@ pub fn create_model_map<T: Into<String>>(map: Vec<(T, T)>) -> HashMap<String, St
     hashmap
 }
 
-pub unsafe fn load_gltf(
-    path: &str,
-    render_settings: &RenderSettings,
-    overrides: &Overrides,
-) -> Vec<Cam> {
+pub unsafe fn load_gltf(path: &str, render_settings: &RenderSettings, overrides: &Overrides) {
     let mats = unsafe { MATERIALS.get().as_mut_unchecked() };
     let texs = unsafe { TEXTURES.get().as_mut_unchecked() };
     let tris = unsafe { TRIANGLES.get().as_mut_unchecked() };
@@ -58,8 +54,10 @@ pub unsafe fn load_gltf(
     let mat_names = lock.get_mut_or_init(HashMap::new);
     let mut lock_tex = TEXTURE_NAMES.lock().unwrap();
     let tex_names = lock_tex.get_mut_or_init(HashMap::new);
+    let cams = unsafe { CAMERAS.get().as_mut_unchecked() };
+    let mut lock_cams = CAMERA_MAP.lock().unwrap();
+    let cam_map = lock_cams.get_mut_or_init(HashMap::new);
 
-    let mut cams = Vec::new();
     let gltf_data = std::fs::read(path).unwrap_or_else(|e| {
         log::error!("Failed to open scene @ {path}\n{e}");
         std::process::exit(0);
@@ -140,29 +138,29 @@ pub unsafe fn load_gltf(
 
             // load camera if it exists
             if let Some(cam) = node.camera() {
-                // TODO: DO THIS LATER
-                /*let cam_name = cam
-                .name()
-                .map(|s| s.to_owned())
-                .unwrap_or(cam.index().to_string());*/
-
                 if let gltf::camera::Projection::Perspective(perp) = cam.projection() {
                     let hfov = (perp.yfov()
                         * (render_settings.width as f32 / render_settings.height as f32))
                         .to_degrees();
-                    log::info!(
+                    log::trace!(
                         "Loaded cam {} @ {} with fov {}deg & quat {:?}",
                         cams.len(),
                         local_translation,
                         hfov,
                         local_rotation,
                     );
+                    let idx = cams.len();
                     cams.push(Cam::new_quat(
                         local_translation,
                         local_rotation,
                         hfov,
                         render_settings,
                     ));
+
+                    if let Some(name) = cam.name() {
+                        cam_map.insert(CamIdentifier::Name(name.to_owned()), idx);
+                    }
+                    cam_map.insert(CamIdentifier::Index(cam.index()), idx);
                 }
             }
 
@@ -311,8 +309,6 @@ pub unsafe fn load_gltf(
     log::info!("Loaded: {} textures", texs.len());
     log::info!("Loaded: {} verts", verts.len());
     log::info!("Loaded: {} norms", norms.len());
-
-    cams
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
