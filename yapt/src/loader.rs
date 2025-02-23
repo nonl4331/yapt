@@ -482,7 +482,23 @@ fn mat_to_mat(
                 .map(|o| o.ior.map(|ior| ior as f32))
                 .flatten()
                 .unwrap_or(1.5);
-            Mat::Refractive(Refractive::new(ior))
+            Mat::Refractive(SmoothDielectric::new(ior))
+        }
+        MatType::Reflective => {
+            let mut base_colour = format!("{mat_name}.base_colour");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+                log::info!("Found override for {base_colour}");
+                base_colour = name;
+            }
+            let base_colour_tex = get_tex_idx(
+                base_colour,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Colour,
+                bufs,
+            );
+            Mat::Reflective(SmoothConductor::new(base_colour_tex))
         }
         MatType::Invisible => unreachable!(), // this should be checked before this function!
         MatType::Glossy => {

@@ -1,12 +1,11 @@
 pub use crate::prelude::*;
 
-// perfect refractive top layer + lambertian bottom layer
 #[derive(Debug)]
-pub struct Refractive {
+pub struct SmoothDielectric {
     pub ior: f32,
 }
 
-impl Refractive {
+impl SmoothDielectric {
     pub fn new(ior: f32) -> Self {
         Self { ior }
     }

@@ -58,6 +58,7 @@ pub enum MatType {
     #[default]
     Default,
     Metallic,
+    Reflective,
     Glossy,
     Diffuse,
     Glass,
@@ -355,6 +356,7 @@ fn parse_mat_override(mat_overrides: &mut HashMap<String, MatOverride>, name: &s
             "default" => MatType::Default,
             "lambertian" | "diffuse" => MatType::Diffuse,
             "ggx" | "metallic" => MatType::Metallic,
+            "reflective" => MatType::Reflective,
             "glossy" => MatType::Glossy,
             "glass" | "refractive" => MatType::Glass,
             "light" | "emissive" => MatType::Light,

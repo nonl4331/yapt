@@ -3,13 +3,13 @@ pub use crate::prelude::*;
 #[derive(Debug)]
 pub struct Ggx {
     pub roughness: usize,
-    pub ior: usize,
+    pub f0: usize,
 }
 
 impl Ggx {
     #[must_use]
-    pub fn new(roughness: usize, ior: usize) -> Self {
-        Self { roughness, ior }
+    pub fn new(roughness: usize, f0: usize) -> Self {
+        Self { roughness, f0 }
     }
     #[must_use]
     pub fn scatter(
@@ -143,8 +143,8 @@ impl Ggx {
     #[must_use]
     pub fn f(&self, cos_theta: f32, uv: Vec2) -> Vec3 {
         let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        let ior = texs[self.ior].uv_value(uv);
-        ior + (1.0 - ior) * (1.0 - cos_theta).powi(5)
+        let f0 = texs[self.f0].uv_value(uv);
+        f0 + (1.0 - f0) * (1.0 - cos_theta).powi(5)
     }
     #[must_use]
     fn get_a(&self, sect: &Intersection) -> f32 {
