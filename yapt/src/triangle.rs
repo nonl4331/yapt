@@ -147,7 +147,7 @@ impl Tri {
 
         let t = inv_det * t_scaled;
 
-        let mut normal = b0 * n0 + b1 * n1 + b2 * n2;
+        let mut normal = (b0 * n0 + b1 * n1 + b2 * n2).normalised();
 
         if feature_enabled(DISABLE_SHADING_NORMALS) {
             let mut gnormal = (v2 - v0).cross(v1 - v0).normalised();
@@ -171,21 +171,15 @@ impl Tri {
     #[must_use]
     pub fn sample_ray(&self, sect: &Intersection, rng: &mut impl MinRng) -> (Ray, Vec3) {
         let verts = unsafe { VERTICES.get().as_ref_unchecked() };
-        let norms = unsafe { NORMALS.get().as_ref_unchecked() };
         let mats = unsafe { MATERIALS.get().as_ref_unchecked() };
         let v0 = verts[self.pos[0]];
         let v1 = verts[self.pos[1]];
         let v2 = verts[self.pos[2]];
-        let n0 = norms[self.nor[0]];
-        let n1 = norms[self.nor[1]];
-        let n2 = norms[self.nor[2]];
 
         let uv = rng.gen().sqrt();
         let uv = (1.0 - uv, uv * rng.gen());
 
-        let mut point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
-        let nor = uv.0 * n0 + uv.1 * n1 + (1.0 - uv.0 - uv.1) * n2;
-        point += nor * 0.000001;
+        let point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
 
         let dir = point - sect.pos;
 
