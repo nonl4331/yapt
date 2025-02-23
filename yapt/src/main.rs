@@ -164,7 +164,12 @@ fn main() {
 
     let mut args = InputParameters::parse();
 
-    let overrides = overrides::load_overrides_file(&mut args);
+    let overrides = if !args.overrides.is_empty() {
+        overrides::load_overrides_file(&mut args)
+    } else {
+        Overrides::default()
+    };
+
     let rs: RenderSettings = args.into();
 
     // GUI mode

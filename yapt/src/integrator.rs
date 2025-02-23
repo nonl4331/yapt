@@ -30,15 +30,14 @@ impl Naive {
 
             rgb += mat.le() * tp;
 
-            if mat
-                .scatter(&sect, &mut ray, rng)
-                .contains(ScatterStatus::EXIT)
-            {
+            let status = mat.scatter(&sect, &mut ray, rng);
+
+            if status.contains(ScatterStatus::EXIT) {
                 break;
             }
 
             // by convention both wo and wi point away from the surface
-            tp *= mat.eval(&sect, wo, ray.dir);
+            tp *= mat.eval(&sect, wo, ray.dir, status);
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
@@ -137,7 +136,7 @@ impl NEEMIS {
                 unreachable!()
             }
 
-            tp *= mat.eval(&sect, wo, ray.dir);
+            tp *= mat.eval(&sect, wo, ray.dir, status);
 
             ray_count += 1;
             let new_sect = get_intersection(&ray, rng);
@@ -164,7 +163,7 @@ impl NEEMIS {
 
             sect = new_sect;
             mat = new_mat;
-            wo = ray.dir;
+            wo = -ray.dir;
 
             // ----
             // Russian Roulette early exit

@@ -449,7 +449,7 @@ fn mat_to_mat(
                 TexType::Ior,
                 bufs,
             );
-            Mat::Glossy(Ggx::new(metallic_roughness_tex, base_colour_tex))
+            Mat::Metallic(Ggx::new(metallic_roughness_tex, base_colour_tex))
         }
         MatType::Light => {
             let irradiance = mat_overrides
@@ -485,7 +485,29 @@ fn mat_to_mat(
             Mat::Refractive(Refractive::new(ior))
         }
         MatType::Invisible => unreachable!(), // this should be checked before this function!
-        MatType::Glossy => unimplemented!(),
+        MatType::Glossy => {
+            let mut base_colour = format!("{mat_name}.base_colour");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
+                log::info!("Found override for {base_colour}");
+                base_colour = name;
+            }
+
+            let base_colour_tex = get_tex_idx(
+                base_colour,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Colour,
+                bufs,
+            );
+
+            let ior = mat_overrides
+                .map(|o| o.ior.map(|ior| ior as f32 + 1.0))
+                .flatten()
+                .unwrap_or(1.5);
+
+            Mat::Glossy(Glossy::new(ior, base_colour_tex))
+        }
     };
 
     Some(mat)

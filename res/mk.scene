@@ -8,15 +8,23 @@
 	"env_hash": "9ef9eb7f373ac6523e64cd003fea41320451958b25ff6cfdc894227240e006f1",
 
 	"mat.case": {
-		"type": "refractive",
-		"ior": 1.33
+		"type": "metallic",
+		"albedo": "red",
+		"roughness": "shiny",
+		"ior": 1.49
 	},
 	"mat.backdrop": {
-		"type": "metallic",
-		"roughness_metallic": "white"
+		"type": "diffuse",
+		"roughness": "white"
 	},
 	"mat.inside": {
 		"type": "diffuse"
+	},
+	"tex.shiny": {
+		"rgb": [1.0, 0.001, 0.0]
+	},
+	"tex.red": {
+		"rgb": [1.0, 0.0, 0.0]
 	},
 	"tex.white": {
 		"rgb": [1.0, 1.0, 1.0]

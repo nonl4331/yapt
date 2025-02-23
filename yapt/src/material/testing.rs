@@ -63,7 +63,7 @@ mod tests {
         let a = get_a();
 
         let name = "ggx";
-        let mat = Mat::Glossy(Ggx::new(RAND_TEX, ONE_TEX));
+        let mat = Mat::Metallic(Ggx::new(RAND_TEX, ONE_TEX));
 
         log_info("ggx", format!("alpha: {a}"));
 

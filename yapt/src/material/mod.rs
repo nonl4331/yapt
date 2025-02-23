@@ -5,10 +5,12 @@ use crate::coord::Coordinate;
 use crate::{prelude::*, TEXTURES};
 
 mod ggx;
+mod glossy;
 mod refractive;
 mod testing;
 
 pub use ggx::Ggx;
+pub use glossy::Glossy;
 pub use refractive::Refractive;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,14 +66,21 @@ impl BitOr for MaterialProperties {
 pub enum Mat {
     Matte(Matte),
     Light(Light),
-    Glossy(Ggx),
+    Metallic(Ggx),
+    Glossy(Glossy),
     Refractive(Refractive),
     Invisible,
 }
 
 impl Mat {
     #[must_use]
-    pub fn eval(&self, sect: &Intersection, mut wo: Vec3, mut wi: Vec3) -> Vec3 {
+    pub fn eval(
+        &self,
+        sect: &Intersection,
+        mut wo: Vec3,
+        mut wi: Vec3,
+        status: ScatterStatus,
+    ) -> Vec3 {
         let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
@@ -80,8 +89,9 @@ impl Mat {
         match self {
             // cos pdf and weakening factor cancel out
             Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
+            Self::Glossy(m) => m.eval(sect, wi, wo, status),
             Self::Light(_) | Self::Invisible => unreachable!(),
-            Self::Glossy(m) => m.eval(wo, wi, sect),
+            Self::Metallic(m) => m.eval(wo, wi, sect),
             Self::Refractive(_) => Vec3::ONE,
         }
     }
@@ -95,6 +105,7 @@ impl Mat {
             Self::Matte(_) => Matte::scatter(ray, sect, rng),
             Self::Light(_) => ScatterStatus::EXIT,
             Self::Invisible => unreachable!(),
+            Self::Metallic(m) => m.scatter(sect, ray, rng),
             Self::Glossy(m) => m.scatter(sect, ray, rng),
             Self::Refractive(m) => m.scatter(sect, ray, rng),
         }
@@ -110,14 +121,18 @@ impl Mat {
 
         match self {
             Self::Invisible => false,
-            Self::Glossy(m) => texs[m.ior].does_intersect(uv, rng),
+            Self::Metallic(m) => texs[m.ior].does_intersect(uv, rng),
             _ => true,
         }
     }
     #[must_use]
     pub fn le(&self) -> Vec3 {
         match self {
-            Self::Matte(_) | Self::Glossy(_) | Self::Refractive(_) | Self::Invisible => Vec3::ZERO,
+            Self::Matte(_)
+            | Self::Metallic(_)
+            | Self::Refractive(_)
+            | Self::Invisible
+            | Self::Glossy(_) => Vec3::ZERO,
             Self::Light(l) => l.irradiance,
         }
     }
@@ -131,7 +146,8 @@ impl Mat {
         match self {
             Self::Matte(_) => Matte::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
-            Self::Glossy(m) => m.pdf(wo, wi, sect),
+            Self::Metallic(m) => m.pdf(wo, wi, sect),
+            Self::Glossy(m) => m.pdf(sect, wi, wo),
             Self::Invisible | Self::Refractive(_) => unreachable!(),
         }
     }
@@ -143,14 +159,15 @@ impl Mat {
         match self {
             Self::Matte(m) => m.bxdf_cos(sect, wo, wi),
             Self::Light(_) | Self::Invisible | Self::Refractive(_) => unreachable!(),
-            Self::Glossy(m) => m.bxdf_cos(wo, wi, sect),
+            Self::Metallic(m) => m.bxdf_cos(wo, wi, sect),
+            Self::Glossy(m) => m.bxdf_cos(sect, wi, wo),
         }
     }
     #[must_use]
     fn requires_local_space(&self) -> bool {
         match self {
-            Self::Matte(_) | Self::Light(_) | Self::Refractive(_) => false,
-            Self::Glossy(_) => true,
+            Self::Matte(_) | Self::Light(_) | Self::Refractive(_) | Self::Glossy(_) => false,
+            Self::Metallic(_) => true,
             Self::Invisible => unreachable!(),
         }
     }
