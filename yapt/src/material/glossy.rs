@@ -34,7 +34,7 @@ impl Glossy {
     ) -> ScatterStatus {
         // by convention both wi and wo are pointing away from the surface
         let wo = -ray.dir;
-        let r = fresnel_reflectance(sect, wo, self.ior);
+        let r = self.fresnel_reflectance(sect, wo);
         let origin = sect.pos + 0.00001 * sect.nor;
 
         if rng.gen() > r {
@@ -54,8 +54,8 @@ impl Glossy {
     }
     // should never be reached with dirac delta scatter
     pub fn bxdf_cos(&self, sect: &Intersection, wi: Vec3, wo: Vec3) -> Vec3 {
-        let fi = fresnel_reflectance(sect, wo, self.ior);
-        let fo = fresnel_reflectance(sect, wi, self.ior);
+        let fi = self.fresnel_reflectance(sect, wo);
+        let fo = self.fresnel_reflectance(sect, wi);
 
         let a = self.get_albedo(sect);
 
@@ -64,14 +64,14 @@ impl Glossy {
     }
     // should never be reached with dirac delta scatter
     pub fn pdf(&self, sect: &Intersection, wi: Vec3, wo: Vec3) -> f32 {
-        let fi = fresnel_reflectance(sect, wo, self.ior);
+        let fi = self.fresnel_reflectance(sect, wo);
 
         (1.0 - fi) * wi.dot(sect.nor).max(0.0) * FRAC_1_PI
     }
     // the simplified case where you are evaluations BRDF * COS / PDF
     pub fn eval(&self, sect: &Intersection, wi: Vec3, _: Vec3, status: ScatterStatus) -> Vec3 {
         let a = self.get_albedo(sect);
-        let fo = fresnel_reflectance(sect, wi, self.ior);
+        let fo = self.fresnel_reflectance(sect, wi);
 
         if status.contains(ScatterStatus::DIRAC_DELTA) {
             return Vec3::ONE;
@@ -83,5 +83,23 @@ impl Glossy {
     pub fn get_albedo(&self, sect: &Intersection) -> Vec3 {
         let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
         texs[self.albedo].uv_value(sect.uv)
+    }
+    fn fresnel_reflectance(&self, sect: &Intersection, w: Vec3) -> f32 {
+        let cosi = w.dot(sect.nor);
+
+        let sint_sq = self.eta_sq * (1.0 - cosi.powi(2));
+        let is_tir = sint_sq >= 1.0;
+        if is_tir {
+            return 1.0;
+        }
+
+        let cost = (1.0 - sint_sq).sqrt();
+
+        let eta1 = 1.0;
+        let eta2 = self.ior;
+
+        let rs = ((eta1 * cosi - eta2 * cost) / (eta1 * cosi + eta2 * cost)).powi(2);
+        let rp = ((eta1 * cost - eta2 * cosi) / (eta1 * cost + eta2 * cosi)).powi(2);
+        0.5 * (rs + rp)
     }
 }
