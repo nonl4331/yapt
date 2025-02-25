@@ -6,8 +6,8 @@ pub struct SmoothConductor {
 }
 
 impl SmoothConductor {
-    pub fn new(f0: usize) -> Self {
-        Self { f0 }
+    pub fn new(f0: usize) -> Mat {
+        Mat::Reflective(Self { f0 })
     }
     // see https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
     pub fn scatter(&self, sect: &Intersection, ray: &mut Ray) -> ScatterStatus {

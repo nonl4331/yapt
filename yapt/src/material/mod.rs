@@ -4,16 +4,16 @@ use std::ops::{BitAnd, BitOr};
 use crate::coord::Coordinate;
 use crate::{prelude::*, TEXTURES};
 
-mod ggx;
-mod glossy;
+mod rough_conductor;
 mod smooth_conductor;
 mod smooth_dielectric;
+mod smooth_dielectric_lambertian;
 mod testing;
 
-pub use ggx::Ggx;
-pub use glossy::Glossy;
+pub use rough_conductor::RoughConductor;
 pub use smooth_conductor::SmoothConductor;
 pub use smooth_dielectric::SmoothDielectric;
+pub use smooth_dielectric_lambertian::SmoothDielectricLambertian;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScatterStatus(u8);
@@ -66,10 +66,10 @@ impl BitOr for MaterialProperties {
 
 #[derive(Debug, new)]
 pub enum Mat {
-    Matte(Matte),
+    Matte(Lambertian),
     Light(Light),
-    Metallic(Ggx),
-    Glossy(Glossy),
+    Metallic(RoughConductor),
+    Glossy(SmoothDielectricLambertian),
     Refractive(SmoothDielectric),
     Reflective(SmoothConductor),
     Invisible,
@@ -106,7 +106,7 @@ impl Mat {
         rng: &mut impl MinRng,
     ) -> ScatterStatus {
         match self {
-            Self::Matte(_) => Matte::scatter(ray, sect, rng),
+            Self::Matte(_) => Lambertian::scatter(ray, sect, rng),
             Self::Light(_) => ScatterStatus::EXIT,
             Self::Invisible => unreachable!(),
             Self::Metallic(m) => m.scatter(sect, ray, rng),
@@ -151,7 +151,7 @@ impl Mat {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
         match self {
-            Self::Matte(_) => Matte::pdf(wi, sect.nor),
+            Self::Matte(_) => Lambertian::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
             Self::Metallic(m) => m.pdf(wo, wi, sect),
             Self::Glossy(m) => m.pdf(sect, wi, wo),
@@ -191,12 +191,15 @@ impl Mat {
     }
 }
 
-#[derive(Debug, new)]
-pub struct Matte {
+#[derive(Debug)]
+pub struct Lambertian {
     pub albedo: usize,
 }
 
-impl Matte {
+impl Lambertian {
+    pub fn new(albedo: usize) -> Mat {
+        Mat::Matte(Self { albedo })
+    }
     pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl MinRng) -> ScatterStatus {
         let dir = Self::sample(sect.nor, rng);
         *ray = Ray::new(sect.pos, dir.normalised());
@@ -228,7 +231,13 @@ impl Matte {
     }
 }
 
-#[derive(Debug, new)]
+#[derive(Debug)]
 pub struct Light {
     irradiance: Vec3,
+}
+
+impl Light {
+    pub fn new(irradiance: Vec3) -> Mat {
+        Mat::Light(Self { irradiance })
+    }
 }

@@ -1,15 +1,16 @@
 pub use crate::prelude::*;
 
+// uses GGX
 #[derive(Debug)]
-pub struct Ggx {
+pub struct RoughConductor {
     pub roughness: usize,
     pub f0: usize,
 }
 
-impl Ggx {
+impl RoughConductor {
     #[must_use]
-    pub fn new(roughness: usize, f0: usize) -> Self {
-        Self { roughness, f0 }
+    pub fn new(roughness: usize, f0: usize) -> Mat {
+        Mat::Metallic(Self { roughness, f0 })
     }
     #[must_use]
     pub fn scatter(

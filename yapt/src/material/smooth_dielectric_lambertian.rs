@@ -1,15 +1,15 @@
 use crate::prelude::*;
 
 #[derive(Debug)]
-pub struct Glossy {
+pub struct SmoothDielectricLambertian {
     ior: f32,
     albedo: usize,
     eta_sq: f32,
     ri_average: f32,
 }
 
-impl Glossy {
-    pub fn new(ior: f32, albedo: usize) -> Self {
+impl SmoothDielectricLambertian {
+    pub fn new(ior: f32, albedo: usize) -> Mat {
         let ni = ior;
         let ni2 = ni.powi(2);
         let ni4 = ni2.powi(2);
@@ -19,12 +19,12 @@ impl Glossy {
             - (2.0 * ni2 * ni * (ni2 + 2.0 * ni - 1.0)) / ((ni2 + 1.0) * (ni4 - 1.0))
             + (8.0 * ni4 * (ni4 + 1.0)) / ((ni2 + 1.0) * (ni4 - 1.0).powi(2)) * ni.ln();
         let ri_average = 1.0 - (1.0 / ni2) * (1.0 - re_average);
-        Self {
+        Mat::Glossy(Self {
             ior,
             albedo,
             eta_sq: (1.0 / ior).powi(2),
             ri_average,
-        }
+        })
     }
     pub fn scatter(
         &self,

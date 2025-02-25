@@ -6,8 +6,8 @@ pub struct SmoothDielectric {
 }
 
 impl SmoothDielectric {
-    pub fn new(ior: f32) -> Self {
-        Self { ior }
+    pub fn new(ior: f32) -> Mat {
+        Mat::Refractive(Self { ior })
     }
     // see https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
     pub fn scatter(
