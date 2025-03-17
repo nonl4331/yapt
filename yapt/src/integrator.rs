@@ -38,6 +38,9 @@ impl Naive {
 
             // by convention both wo and wi point away from the surface
             tp *= mat.eval(&sect, wo, ray.dir, status);
+            if tp.contains_nan() {
+                return (Vec3::new(0.0, 1.0, 0.0), depth);
+            }
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();

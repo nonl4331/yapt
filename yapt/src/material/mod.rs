@@ -5,12 +5,14 @@ use crate::coord::Coordinate;
 use crate::{prelude::*, TEXTURES};
 
 mod rough_conductor;
+mod rough_dielectric;
 mod smooth_conductor;
 mod smooth_dielectric;
 mod smooth_dielectric_lambertian;
 mod testing;
 
 pub use rough_conductor::RoughConductor;
+pub use rough_dielectric::RoughDielectric;
 pub use smooth_conductor::SmoothConductor;
 pub use smooth_dielectric::SmoothDielectric;
 pub use smooth_dielectric_lambertian::SmoothDielectricLambertian;
@@ -71,6 +73,7 @@ pub enum Mat {
     Metallic(RoughConductor),
     Glossy(SmoothDielectricLambertian),
     Refractive(SmoothDielectric),
+    RoughRefractive(RoughDielectric),
     Reflective(SmoothConductor),
     Invisible,
 }
@@ -96,6 +99,7 @@ impl Mat {
             Self::Light(_) | Self::Invisible => unreachable!(),
             Self::Metallic(m) => m.eval(wo, wi, sect),
             Self::Refractive(_) => Vec3::ONE,
+            Self::RoughRefractive(m) => m.eval(wo, wi, sect),
             Self::Reflective(m) => m.eval(wo, wi, sect),
         }
     }
@@ -112,6 +116,7 @@ impl Mat {
             Self::Metallic(m) => m.scatter(sect, ray, rng),
             Self::Glossy(m) => m.scatter(sect, ray, rng),
             Self::Refractive(m) => m.scatter(sect, ray, rng),
+            Self::RoughRefractive(m) => m.scatter(sect, ray, rng),
             Self::Reflective(m) => m.scatter(sect, ray),
         }
     }
@@ -137,6 +142,7 @@ impl Mat {
             Self::Matte(_)
             | Self::Metallic(_)
             | Self::Refractive(_)
+            | Self::RoughRefractive(_)
             | Self::Reflective(_)
             | Self::Invisible
             | Self::Glossy(_) => Vec3::ZERO,
@@ -154,6 +160,7 @@ impl Mat {
             Self::Matte(_) => Lambertian::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
             Self::Metallic(m) => m.pdf(wo, wi, sect),
+            Self::RoughRefractive(m) => m.pdf(wo, wi, sect),
             Self::Glossy(m) => m.pdf(sect, wi, wo),
             Self::Invisible | Self::Refractive(_) | Self::Reflective(_) => unreachable!(),
         }
@@ -169,6 +176,7 @@ impl Mat {
                 unreachable!()
             }
             Self::Metallic(m) => m.bxdf_cos(wo, wi, sect),
+            Self::RoughRefractive(m) => m.bxdf_cos(wo, wi, sect),
             Self::Glossy(m) => m.bxdf_cos(sect, wi, wo),
         }
     }
@@ -180,7 +188,7 @@ impl Mat {
             | Self::Refractive(_)
             | Self::Glossy(_)
             | Self::Reflective(_) => false,
-            Self::Metallic(_) => true,
+            Self::Metallic(_) | Self::RoughRefractive(_) => true,
             Self::Invisible => unreachable!(),
         }
     }
@@ -240,4 +248,36 @@ impl Light {
     pub fn new(irradiance: Vec3) -> Mat {
         Mat::Light(Self { irradiance })
     }
+}
+
+// fresnel dielectric
+// eta1 = outer ior, eta2 = inner ior
+#[must_use]
+#[inline(always)]
+pub fn fresnel_dielectric(eta1: f32, eta2: f32, nor: Vec3, wo: Vec3) -> f32 {
+    let eta = eta1 / eta2;
+
+    let cosi = wo.dot(nor);
+
+    let sint_sq = eta.powi(2) * (1.0 - cosi.powi(2));
+    let is_tir = sint_sq >= 1.0;
+    if is_tir {
+        return 1.0;
+    }
+
+    let cost = (1.0 - sint_sq).sqrt();
+
+    let rs = ((eta1 * cosi - eta2 * cost) / (eta1 * cosi + eta2 * cost)).powi(2);
+    let rp = ((eta1 * cost - eta2 * cosi) / (eta1 * cost + eta2 * cosi)).powi(2);
+
+    0.5 * (rs + rp)
+}
+
+// fresnel conductor
+// due to RGB rendering use shlick's approximation
+// https://diglib.eg.org/server/api/core/bitstreams/726dc384-d7dd-4c0e-8806-eadec0ff3886/content
+#[must_use]
+#[inline(always)]
+pub fn fresnel_conductor(f0: Vec3, cos: f32) -> Vec3 {
+    f0 + (1.0 - f0) * (1.0 - cos).powi(5)
 }

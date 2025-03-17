@@ -8,9 +8,9 @@
 	"env_hash": "9ef9eb7f373ac6523e64cd003fea41320451958b25ff6cfdc894227240e006f1",
 
 	"mat.case": {
-		"type": "metallic",
+		"type": "rough glass",
 		"albedo": "red",
-		"roughness": "shiny",
+		"roughness": "r",
 		"ior": 1.49
 	},
 	"mat.backdrop": {
@@ -20,8 +20,8 @@
 	"mat.inside": {
 		"type": "diffuse"
 	},
-	"tex.shiny": {
-		"rgb": [1.0, 0.001, 0.0]
+	"tex.r": {
+		"rgb": [1.0, 0.4, 0.0]
 	},
 	"tex.red": {
 		"rgb": [1.0, 0.0, 0.0]

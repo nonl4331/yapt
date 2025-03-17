@@ -62,6 +62,7 @@ pub enum MatType {
     Glossy,
     Diffuse,
     Glass,
+    RoughGlass,
     Light,
     Invisible,
 }
@@ -359,6 +360,7 @@ fn parse_mat_override(mat_overrides: &mut HashMap<String, MatOverride>, name: &s
             "reflective" => MatType::Reflective,
             "glossy" => MatType::Glossy,
             "glass" | "refractive" => MatType::Glass,
+            "rough glass" | "rough refractive" => MatType::RoughGlass,
             "light" | "emissive" => MatType::Light,
             "invisible" => MatType::Invisible,
             _ => {

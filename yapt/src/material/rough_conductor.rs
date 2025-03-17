@@ -1,4 +1,4 @@
-pub use crate::prelude::*;
+use crate::prelude::*;
 
 // uses GGX
 #[derive(Debug)]
@@ -40,8 +40,11 @@ impl RoughConductor {
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        let f0 = texs[self.f0].uv_value(sect.uv);
+        let f = super::fresnel_conductor(f0, wm.dot(wo));
+
         let g2 = self.g2_local(a_sq, wo, wi, wm);
-        let f = self.f(wm.dot(wo), sect.uv);
         let g1 = self.g1_local(a_sq, wo, wm);
         if g1 == 0.0 {
             return Vec3::ZERO;
@@ -52,9 +55,13 @@ impl RoughConductor {
     pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
         let a_sq = self.get_a(sect).powi(2);
 
+        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
+        let f0 = texs[self.f0].uv_value(sect.uv);
+
         let wm = (wo + wi).normalised();
-        self.f(wm.dot(wo), sect.uv) * self.ndf_local(a_sq, wm) * self.g2_local(a_sq, wo, wi, wm)
-            / (4.0 * wo.z)
+        let f = super::fresnel_conductor(f0, wm.dot(wo));
+
+        f * self.ndf_local(a_sq, wm) * self.g2_local(a_sq, wo, wi, wm) / (4.0 * wo.z)
     }
     // local space (hemisphere on z=0 plane see section 2, definition)
     #[must_use]
@@ -137,15 +144,6 @@ impl RoughConductor {
             out = 0.0;
         }
         out
-    }
-    // fresnel
-    // due to RGB rendering use shlick's approximation
-    // https://diglib.eg.org/server/api/core/bitstreams/726dc384-d7dd-4c0e-8806-eadec0ff3886/content
-    #[must_use]
-    pub fn f(&self, cos_theta: f32, uv: Vec2) -> Vec3 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        let f0 = texs[self.f0].uv_value(uv);
-        f0 + (1.0 - f0) * (1.0 - cos_theta).powi(5)
     }
     #[must_use]
     fn get_a(&self, sect: &Intersection) -> f32 {

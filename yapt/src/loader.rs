@@ -484,6 +484,29 @@ fn mat_to_mat(
                 .unwrap_or(1.5);
             SmoothDielectric::new(ior)
         }
+        MatType::RoughGlass => {
+            let ior = mat_overrides
+                .map(|o| o.ior.map(|ior| ior as f32))
+                .flatten()
+                .unwrap_or(1.5);
+
+            let mut metallic_roughness = format!("{mat_name}.metallic_roughness");
+            if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.roughness.clone()) {
+                log::info!("Found override for {metallic_roughness}");
+                metallic_roughness = name;
+            }
+
+            let metallic_roughness_tex = get_tex_idx(
+                metallic_roughness,
+                tex_names,
+                overrides,
+                gltf_mat,
+                TexType::Ior,
+                bufs,
+            );
+
+            RoughDielectric::new(metallic_roughness_tex, ior)
+        }
         MatType::Reflective => {
             let mut base_colour = format!("{mat_name}.base_colour");
             if let Some(TexIdentifier::Name(name)) = mat_overrides.map(|o| o.albedo.clone()) {
@@ -518,7 +541,7 @@ fn mat_to_mat(
             );
 
             let ior = mat_overrides
-                .map(|o| o.ior.map(|ior| ior as f32 + 1.0))
+                .map(|o| o.ior.map(|ior| ior as f32))
                 .flatten()
                 .unwrap_or(1.5);
 
