@@ -61,9 +61,34 @@ mod tests {
         let mut rng = thread_rng();
         let wo = generate_wo(&mut rng, true);
 
-        let mat = SmoothDielectricLambertian::new(1.5, ZERO_TEX);
+        let mat = SmoothDielectricLambertian::new_raw(1.5, ZERO_TEX);
 
-        test_material("glossy", mat, wo, &mut rng);
+        let sect = &Intersection::new(1.0, Vec2::ZERO, Vec3::ZERO, Vec3::Z, true, 0, 0);
+
+        let sample = || -> Vec3 {
+            loop {
+                let mut ray = Ray::new(Vec3::ZERO, -wo);
+                if !mat
+                    .scatter(sect, &mut ray, &mut rng)
+                    .contains(ScatterStatus::DIRAC_DELTA)
+                {
+                    return ray.dir;
+                }
+            }
+        };
+        let pdf = |wo: Vec3, wi: Vec3| -> f32 { mat.pdf(sect, wi, wo) };
+
+        log_info("glossy", format!("wo: {wo}"));
+
+        sample_image(sample, SAMPLES, "glossy");
+
+        let sum = integrate_pdf(pdf, wo, "glossy");
+
+        let non_dirac = 1.0 - fresnel_dielectric(1.0, mat.ior, sect.nor, wo);
+
+        log_info("glossy", format!("sum: {sum} vs {non_dirac}"));
+
+        assert!((sum - non_dirac as f64).abs() < PDF_EPS);
     }
 
     #[test]

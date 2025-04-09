@@ -193,7 +193,7 @@ impl Mat {
         }
     }
     #[must_use]
-    fn to_local_space(sect: &Intersection, wo: Vec3, wi: Vec3) -> (Vec3, Vec3) {
+    pub fn to_local_space(sect: &Intersection, wo: Vec3, wi: Vec3) -> (Vec3, Vec3) {
         let coord = crate::coord::Coordinate::new_from_z(sect.nor);
         (coord.global_to_local(wo), coord.global_to_local(wi))
     }

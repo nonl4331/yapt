@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 #[derive(Debug)]
 pub struct SmoothDielectricLambertian {
-    ior: f32,
+    pub ior: f32,
     albedo: usize,
     eta_sq: f32,
     ri_average: f32,
@@ -10,6 +10,9 @@ pub struct SmoothDielectricLambertian {
 
 impl SmoothDielectricLambertian {
     pub fn new(ior: f32, albedo: usize) -> Mat {
+        Mat::Glossy(Self::new_raw(ior, albedo))
+    }
+    pub fn new_raw(ior: f32, albedo: usize) -> Self {
         let ni = ior;
         let ni2 = ni.powi(2);
         let ni4 = ni2.powi(2);
@@ -23,13 +26,14 @@ impl SmoothDielectricLambertian {
         if (ior - 1.0).abs() < 0.000001 {
             ri_average = 0.0;
         }
-        Mat::Glossy(Self {
+        Self {
             ior,
             albedo,
             eta_sq: (1.0 / ior).powi(2),
             ri_average,
-        })
+        }
     }
+
     pub fn scatter(
         &self,
         sect: &Intersection,
