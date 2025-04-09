@@ -12,6 +12,9 @@ impl RoughConductor {
     pub fn new(roughness: usize, f0: usize) -> Mat {
         Mat::Metallic(Self { roughness, f0 })
     }
+    pub fn new_raw(roughness: usize, f0: usize) -> Self {
+        Self { roughness, f0 }
+    }
     #[must_use]
     pub fn scatter(
         &self,

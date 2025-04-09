@@ -74,7 +74,7 @@ mod tests {
         let a = get_a();
 
         let name = "ggx";
-        let mat = SmoothConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new(RAND_TEX, ONE_TEX);
 
         log_info("ggx", format!("alpha: {a}"));
 
@@ -120,7 +120,7 @@ mod tests {
         let a_sq = a.powi(2);
 
         let name = "ggx_vndf";
-        let mat = SmoothConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
 
         log_info("ggx_vndf", format!("alpha: {a}"));
 
@@ -146,7 +146,7 @@ mod tests {
         let a_sq = a.powi(2);
 
         let name = "ggx_vndf_transformed";
-        let mat = SmoothConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
 
         log_info("ggx_vndf_transformed", format!("alpha: {a}"));
 
@@ -178,7 +178,7 @@ mod tests {
         let a_sq = a.powi(2);
 
         let name = "ggx_ndf_area";
-        let mat = SmoothConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
 
         let pdf = |_: Vec3, wm: Vec3| -> f32 { mat.ndf_local(a_sq, wm) * wm.z };
 
@@ -200,7 +200,7 @@ mod tests {
         let wo = generate_wo(&mut rng, true);
 
         let name = "weak_white_furnace";
-        let mat = SmoothConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
 
         let pdf = |wo: Vec3, wi: Vec3| -> f32 {
             let wm = (wo + wi).normalised();

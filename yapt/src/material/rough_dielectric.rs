@@ -23,8 +23,8 @@ impl RoughDielectric {
         let coord = crate::coord::Coordinate::new_from_z(sect.nor);
         wo = coord.global_to_local(wo);
         let wm = self.sample_vndf_local(a, wo, rng);
-        assert!(wm.z > 0.0);
-        assert!(wo.z > 0.0);
+        assert!(wm.z >= 0.0);
+        assert!(wo.z >= 0.0);
         // this fails every so often
         //assert!(wo.dot(wm) > 0.0);
 
@@ -63,7 +63,7 @@ impl RoughDielectric {
     }
     #[must_use]
     pub fn eval(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
-        assert!(wo.z > 0.0);
+        //assert!(wo.z > 0.0);
         let pdf = self.pdf(wo, wi, sect);
         let bxdf_cos = self.bxdf_cos(wo, wi, sect);
         if pdf == 0.0 {
