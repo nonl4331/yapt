@@ -3,11 +3,24 @@ mod tests {
     use std::sync::atomic::AtomicU8;
     use std::sync::atomic::Ordering::SeqCst;
     pub static LOADED_DATA: AtomicU8 = AtomicU8::new(0);
-    use rand::thread_rng;
 
-    const ONE_TEX: usize = 0;
-    const ZERO_TEX: usize = 1;
-    const RAND_TEX: usize = 2;
+
+    impl TextureHandler for Vec3 {
+        fn uv_value(&self, _: Vec2) -> Vec3 { *self }
+    }
+
+    #[cfg(not(feature = "rand"))]
+    mod r {
+        use rand::Rng;
+        impl<R: Rng> crate::MinRng for R {
+            fn random(&mut self) -> f32 {
+                self.random::<f32>()
+            }
+            fn random_range(&mut self, range: core::ops::Range<f32>) -> f32 {
+                self.random_range(range)
+            }
+        }
+    }
 
     fn init_test() {
         if LOADED_DATA.load(SeqCst) == 2 {
@@ -22,17 +35,6 @@ mod tests {
             .parse_default_env()
             .is_test(true)
             .init();
-        unsafe {
-            use crate::loader::add_texture;
-            let mut rng = rand::thread_rng();
-            let one = add_texture("", Texture::Solid(Vec3::ONE));
-            assert_eq!(one, ONE_TEX);
-            let zero = add_texture("", Texture::Solid(Vec3::ZERO));
-            assert_eq!(zero, ZERO_TEX);
-            // note Y is roughness
-            let rand = add_texture("", Texture::Solid(Vec3::Y * rng.gen()));
-            assert_eq!(rand, RAND_TEX);
-        }
         LOADED_DATA.store(2, SeqCst);
     }
 
@@ -42,15 +44,15 @@ mod tests {
     const PDF_EPS: f64 = 1e-3;
     const SAMPLES: usize = 10_000_000;
 
-    use super::super::*;
+    use crate::*;
 
     #[test]
     pub fn lambertian() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let wo = generate_wo(&mut rng, true);
 
-        let mat = Lambertian::new(ZERO_TEX);
+        let mat = Lambertian::new(Vec3::ZERO);
 
         test_material("lambertian", mat, wo, &mut rng);
     }
@@ -59,10 +61,10 @@ mod tests {
     #[test]
     pub fn layered() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let wo = generate_wo(&mut rng, true);
 
-        let mat = SmoothDielectricLambertian::new_raw(1.5, ZERO_TEX);
+        let mat = SmoothDielectricLambertian::new_raw(1.5, Vec3::ZERO);
 
         let sect = &Intersection::new(1.0, Vec2::ZERO, Vec3::ZERO, Vec3::Z, true, 0, 0);
 
@@ -95,12 +97,13 @@ mod tests {
     #[test]
     pub fn rough_dielectric() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let wo = generate_wo(&mut rng, true);
-        let a = get_a();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
+        let a = rand.y;
 
         let name = "rough dielectric";
-        let mat = RoughDielectric::new(RAND_TEX, 1.5);
+        let mat = RoughDielectric::new(Vec3::Y * MinRng::random(&mut rng), 1.5);
 
         log_info("rough dielectric", format!("alpha: {a}"));
 
@@ -110,12 +113,13 @@ mod tests {
     #[test]
     pub fn ggx() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let wo = generate_wo(&mut rng, true);
-        let a = get_a();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
+        let a = rand.y;
 
         let name = "ggx";
-        let mat = RoughConductor::new(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new(Vec3::Y * MinRng::random(&mut rng), Vec3::ONE);
 
         log_info("ggx", format!("alpha: {a}"));
 
@@ -126,7 +130,7 @@ mod tests {
         log::info!("{mat}: {info}");
     }
 
-    fn test_material(name: &str, m: Mat, wo: Vec3, rng: &mut impl MinRng) {
+    fn test_material(name: &str, m: Material<Vec3>, wo: Vec3, rng: &mut impl MinRng) {
         let sect = &Intersection::new(1.0, Vec2::ZERO, Vec3::ZERO, Vec3::Z, true, 0, 0);
 
         let sample = || -> Vec3 {
@@ -147,21 +151,18 @@ mod tests {
         assert!((sum - 1.0).abs() < PDF_EPS);
     }
 
-    fn get_a() -> f32 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        texs[RAND_TEX].uv_value(Vec2::ZERO)[1].max(0.0001)
-    }
 
     #[test]
     fn vndf() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
         let wo = generate_wo(&mut rng, true);
-        let a = get_a();
+        let a = rand.y;
         let a_sq = a.powi(2);
 
         let name = "ggx_vndf";
-        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(rand, Vec3::ONE);
 
         log_info("ggx_vndf", format!("alpha: {a}"));
 
@@ -181,13 +182,14 @@ mod tests {
     #[test]
     fn vndf_transformed() {
         init_test();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let wo = generate_wo(&mut rng, true);
-        let a = get_a();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
+        let a = rand.y;
         let a_sq = a.powi(2);
 
         let name = "ggx_vndf_transformed";
-        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(rand, Vec3::ONE);
 
         log_info("ggx_vndf_transformed", format!("alpha: {a}"));
 
@@ -215,11 +217,13 @@ mod tests {
     #[test]
     fn ndf_area() {
         init_test();
-        let a = get_a();
+        let mut rng = rand::rng();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
+        let a = rand.y;
         let a_sq = a.powi(2);
 
         let name = "ggx_ndf_area";
-        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(rand, Vec3::ONE);
 
         let pdf = |_: Vec3, wm: Vec3| -> f32 { mat.ndf_local(a_sq, wm) * wm.z };
 
@@ -234,14 +238,15 @@ mod tests {
     #[test]
     fn weak_white_furnace() {
         init_test();
-        let mut rng = thread_rng();
-        let a = get_a();
+        let mut rng = rand::rng();
+        let rand = Vec3::splat(MinRng::random(&mut rng).max(0.0001));
+        let a = rand.y;
         let a_sq = a.powi(2);
 
         let wo = generate_wo(&mut rng, true);
 
         let name = "weak_white_furnace";
-        let mat = RoughConductor::new_raw(RAND_TEX, ONE_TEX);
+        let mat = RoughConductor::new_raw(rand, Vec3::ONE);
 
         let pdf = |wo: Vec3, wi: Vec3| -> f32 {
             let wm = (wo + wi).normalised();
@@ -260,19 +265,19 @@ mod tests {
     // pointing away from surface
     fn generate_wo(rng: &mut impl MinRng, hemi: bool) -> Vec3 {
         let cos_theta: f32 = if hemi {
-            rng.gen()
+            MinRng::random(rng)
         } else {
-            rng.gen_range(-1.0..1.0)
+            rng.random_range(-1.0..1.0)
         };
         let sin_theta = (1.0 - cos_theta.powi(2)).sqrt();
 
-        let phi = TAU * rng.gen();
+        let phi = TAU * MinRng::random(rng);
 
         Vec3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), cos_theta)
     }
 
     fn vector_to_idx(v: Vec3) -> usize {
-        let theta = (v.z.acos() / PI) * THETA_BINS as f32;
+        let theta = (v.z.acos() / std::f32::consts::PI) * THETA_BINS as f32;
         let theta = (theta as usize).min(THETA_BINS - 1);
 
         let phi = v.y.atan2(v.x);

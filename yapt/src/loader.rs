@@ -449,7 +449,7 @@ fn mat_to_mat(
                 TexType::Ior,
                 bufs,
             );
-            RoughConductor::new(metallic_roughness_tex, base_colour_tex)
+            RoughConductor::new(TextureIndex(metallic_roughness_tex), TextureIndex(base_colour_tex))
         }
         MatType::Light => {
             let irradiance = mat_overrides
@@ -475,7 +475,7 @@ fn mat_to_mat(
                 bufs,
             );
 
-            Lambertian::new(base_colour_tex)
+            Lambertian::new(TextureIndex(base_colour_tex))
         }
         MatType::Glass => {
             let ior = mat_overrides
@@ -505,7 +505,7 @@ fn mat_to_mat(
                 bufs,
             );
 
-            RoughDielectric::new(metallic_roughness_tex, ior)
+            RoughDielectric::new(TextureIndex(metallic_roughness_tex), ior)
         }
         MatType::Reflective => {
             let mut base_colour = format!("{mat_name}.base_colour");
@@ -521,7 +521,7 @@ fn mat_to_mat(
                 TexType::Colour,
                 bufs,
             );
-            SmoothConductor::new(base_colour_tex)
+            SmoothConductor::new(TextureIndex(base_colour_tex))
         }
         MatType::Invisible => unreachable!(), // this should be checked before this function!
         MatType::Glossy => {
@@ -545,7 +545,7 @@ fn mat_to_mat(
                 .flatten()
                 .unwrap_or(1.5);
 
-            SmoothDielectricLambertian::new(ior, base_colour_tex)
+            SmoothDielectricLambertian::new(ior, TextureIndex(base_colour_tex))
         }
     };
 

@@ -1,4 +1,28 @@
+pub trait TextureHandler {
+    fn uv_value(&self, uv: Vec2) -> Vec3;
+    fn does_intersect(&self, _: Vec2, _: &mut impl MinRng) -> bool { true }
+}
+
+mod coord;
+mod rough_conductor;
+mod rough_dielectric;
+mod smooth_conductor;
+mod smooth_dielectric;
+mod smooth_dielectric_lambertian;
+mod testing;
+mod mat;
+
+pub use mat::*;
+pub use coord::*;
+pub use rough_conductor::RoughConductor;
+pub use rough_dielectric::RoughDielectric;
+pub use smooth_conductor::SmoothConductor;
+pub use smooth_dielectric::SmoothDielectric;
+pub use smooth_dielectric_lambertian::SmoothDielectricLambertian;
+
 use std::{
+    f32::consts::{FRAC_1_PI, TAU},
+    ops::{BitAnd, BitOr},
     cmp::Ordering,
     ops::{Add, AddAssign, Div, DivAssign, Index, Mul, MulAssign, Neg, Sub, SubAssign},
 };
@@ -522,6 +546,135 @@ mod j {
             } else {
                 Err("Failed to parse into Vec3")
             }
+        }
+    }
+    type Quat = Quaternion;
+    impl TryFrom<&[JsonValue]> for Quat {
+        type Error = &'static str;
+        fn try_from(value: &[JsonValue]) -> Result<Self, Self::Error> {
+            if let [JsonValue::Number(w), JsonValue::Number(x), JsonValue::Number(y), JsonValue::Number(z)] =
+                value[..]
+            {
+                Ok(Quat::new(w.into(), x.into(), y.into(), z.into()))
+            } else {
+                Err("Failed to parse into Quat")
+            }
+        }
+    }
+    impl TryFrom<&JsonValue> for Quat {
+        type Error = &'static str;
+        fn try_from(value: &JsonValue) -> Result<Self, Self::Error> {
+            if let JsonValue::Array(arr) = value {
+                Ok(arr[..].try_into()?)
+            } else {
+                Err("Failed to parse into Quat")
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScatterStatus(u8);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaterialProperties(u8);
+
+impl ScatterStatus {
+    pub const NORMAL: Self = Self(0);
+    pub const EXIT: Self = Self(1);
+    pub const DIRAC_DELTA: Self = Self(1 << 1);
+    pub fn contains(&self, other: Self) -> bool {
+        (*self | other) == *self
+    }
+}
+
+impl BitAnd for ScatterStatus {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+impl BitOr for ScatterStatus {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl MaterialProperties {
+    pub const NORMAL: Self = Self(0);
+    pub const ONLY_DIRAC_DELTA: Self = Self(1);
+    pub fn contains(&self, other: Self) -> bool {
+        (*self | other) == *self
+    }
+}
+
+impl BitAnd for MaterialProperties {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+impl BitOr for MaterialProperties {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+pub trait MinRng {
+    fn random(&mut self) -> f32;
+    fn random_range(&mut self, range: std::ops::Range<f32>) -> f32;
+}
+
+#[cfg(feature = "rand")]
+mod r {
+    use rand::Rng;
+    impl<R: Rng> crate::MinRng for R {
+        fn random(&mut self) -> f32 {
+            self.random::<f32>()
+        }
+        fn random_range(&mut self, range: std::ops::Range<f32>) -> f32 {
+            self.random_range(range)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Intersection {
+    pub t: f32,
+    pub uv: Vec2,
+    pub pos: Vec3,
+    pub nor: Vec3,
+    pub out: bool,
+    pub mat: usize,
+    pub id: usize,
+}
+
+impl Intersection {
+    pub const NONE: Self = Self {
+        t: -1.0,
+        uv: Vec2::ZERO,
+        pos: Vec3::ZERO,
+        nor: Vec3::ZERO,
+        out: false,
+        mat: 0,
+        id: 0,
+    };
+
+    pub const fn new(t: f32, uv: Vec2, pos: Vec3, nor: Vec3, out: bool, mat: usize, id: usize) -> Self {
+        Self { t, uv, pos, nor, out, mat, id }
+    }
+
+    #[allow(clippy::float_cmp)]
+    #[must_use]
+    pub fn is_none(&self) -> bool {
+        self.t == -1.0
+    }
+
+    pub fn min(&mut self, other: Self) {
+        if self.is_none() || (other.t < self.t && other.t > 0.0) {
+            *self = other;
         }
     }
 }

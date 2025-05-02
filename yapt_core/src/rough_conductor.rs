@@ -1,18 +1,18 @@
-use crate::prelude::*;
+use super::*;
 
 // uses GGX
 #[derive(Debug)]
-pub struct RoughConductor {
-    pub roughness: usize,
-    pub f0: usize,
+pub struct RoughConductor<T: TextureHandler> {
+    pub roughness: T,
+    pub f0: T,
 }
 
-impl RoughConductor {
+impl<T: TextureHandler> RoughConductor<T> {
     #[must_use]
-    pub fn new(roughness: usize, f0: usize) -> Mat {
-        Mat::Metallic(Self { roughness, f0 })
+    pub fn new(roughness: T, f0: T) -> Material<T> {
+        Material::Metallic(Self { roughness, f0 })
     }
-    pub fn new_raw(roughness: usize, f0: usize) -> Self {
+    pub fn new_raw(roughness: T, f0: T) -> Self {
         Self { roughness, f0 }
     }
     #[must_use]
@@ -43,8 +43,7 @@ impl RoughConductor {
         let wm = (wo + wi).normalised();
 
         // f * g2 / g1 (Heitz2018GGX 19)
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        let f0 = texs[self.f0].uv_value(sect.uv);
+        let f0 = self.f0.uv_value(sect.uv);
         let f = super::fresnel_conductor(f0, wm.dot(wo));
 
         let g2 = self.g2_local(a_sq, wo, wi, wm);
@@ -58,8 +57,7 @@ impl RoughConductor {
     pub fn bxdf_cos(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {
         let a_sq = self.get_a(sect).powi(2);
 
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        let f0 = texs[self.f0].uv_value(sect.uv);
+        let f0 = self.f0.uv_value(sect.uv);
 
         let wm = (wo + wi).normalised();
         let f = super::fresnel_conductor(f0, wm.dot(wo));
@@ -82,10 +80,10 @@ impl RoughConductor {
     }
     // (section 3, listing 3)
     #[must_use]
-    fn sample_vndf_hemisphere(in_w_hemi: Vec3, rng: &mut impl MinRng) -> Vec3 {
-        let phi = TAU * rng.gen();
+    pub fn sample_vndf_hemisphere(in_w_hemi: Vec3, rng: &mut impl MinRng) -> Vec3 {
+        let phi = TAU * rng.random();
         // can replace (1.0 - x) with x?
-        let z = (1.0 - rng.gen()) * (1.0 + in_w_hemi.z) - in_w_hemi.z;
+        let z = (1.0 - rng.random()) * (1.0 + in_w_hemi.z) - in_w_hemi.z;
         let sin_theta = (1.0 - z.powi(2)).clamp(0.0, 1.0).sqrt();
         let c = Vec3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), z);
         c + in_w_hemi
@@ -123,7 +121,7 @@ impl RoughConductor {
         a_sq * FRAC_1_PI / tmp.powi(2)
     }
     #[must_use]
-    fn lambda(&self, a_sq: f32, w: Vec3) -> f32 {
+    pub fn lambda(&self, a_sq: f32, w: Vec3) -> f32 {
         // Heitz2018 (2)
         // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
         let lambda = a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
@@ -141,7 +139,7 @@ impl RoughConductor {
     }
     // Height correlated G2 (Heitz2014Microfacet 99)
     #[must_use]
-    fn g2_local(&self, a_sq: f32, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
+    pub fn g2_local(&self, a_sq: f32, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
         let mut out = 1.0 / (1.0 + self.lambda(a_sq, wa) + self.lambda(a_sq, wb));
         if wa.dot(wm) * wa.z <= 0.0 || wb.dot(wm) * wb.z <= 0.0 {
             out = 0.0;
@@ -149,8 +147,7 @@ impl RoughConductor {
         out
     }
     #[must_use]
-    fn get_a(&self, sect: &Intersection) -> f32 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        texs[self.roughness].uv_value(sect.uv)[1].max(0.0001)
+    pub fn get_a(&self, sect: &Intersection) -> f32 {
+        self.roughness.uv_value(sect.uv)[1].max(0.0001)
     }
 }

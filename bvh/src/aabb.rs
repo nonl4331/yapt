@@ -1,4 +1,4 @@
-use utility::*;
+use yapt_core::*;
 
 pub trait Aabound {
     fn aabb(&self) -> Aabb;

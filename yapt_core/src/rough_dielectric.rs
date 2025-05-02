@@ -1,14 +1,14 @@
-pub use crate::prelude::*;
+use super::*;
 
 #[derive(Debug)]
-pub struct RoughDielectric {
-    pub roughness: usize,
+pub struct RoughDielectric<T: TextureHandler> {
+    pub roughness: T,
     pub ior: f32,
 }
 
-impl RoughDielectric {
-    pub fn new(roughness: usize, ior: f32) -> Mat {
-        Mat::RoughRefractive(Self { roughness, ior })
+impl<T: TextureHandler> RoughDielectric<T> {
+    pub fn new(roughness: T, ior: f32) -> Material<T> {
+        Material::RoughRefractive(Self { roughness, ior })
     }
     // see https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
     pub fn scatter(
@@ -40,7 +40,7 @@ impl RoughDielectric {
 
         let f = super::fresnel_dielectric(1.0, self.ior, wm, wo);
         // reflect
-        if f >= rng.gen() {
+        if f >= rng.random() {
             let wi = wo.reflected(wm);
             *ray = Ray::new(
                 sect.pos + sect.nor * 0.00001,
@@ -166,9 +166,8 @@ impl RoughDielectric {
     }
 
     #[must_use]
-    fn get_a(&self, sect: &Intersection) -> f32 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        texs[self.roughness].uv_value(sect.uv)[1].max(0.0001)
+    pub fn get_a(&self, sect: &Intersection) -> f32 {
+        self.roughness.uv_value(sect.uv)[1].max(0.0001)
     }
     // local space (hemisphere on z=0 plane see section 2, definition)
     #[must_use]
@@ -187,9 +186,9 @@ impl RoughDielectric {
     // (section 3, listing 3)
     #[must_use]
     fn sample_vndf_hemisphere(in_w_hemi: Vec3, rng: &mut impl MinRng) -> Vec3 {
-        let phi = TAU * rng.gen();
+        let phi = TAU * rng.random();
         // can replace (1.0 - x) with x?
-        let z = (1.0 - rng.gen()) * (1.0 + in_w_hemi.z) - in_w_hemi.z;
+        let z = (1.0 - rng.random()) * (1.0 + in_w_hemi.z) - in_w_hemi.z;
         let sin_theta = (1.0 - z.powi(2)).clamp(0.0, 1.0).sqrt();
         let c = Vec3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), z);
         c + in_w_hemi
@@ -215,7 +214,7 @@ impl RoughDielectric {
         a_sq * FRAC_1_PI / tmp.powi(2)
     }
     #[must_use]
-    fn lambda(&self, a_sq: f32, w: Vec3) -> f32 {
+    pub fn lambda(&self, a_sq: f32, w: Vec3) -> f32 {
         // Heitz2018 (2)
         // fairly certain that w.x^2 + w.y^2 / w.z^2 = tan^2
         let lambda = a_sq * (w.x.powi(2) + w.y.powi(2)) / w.z.powi(2);
@@ -233,7 +232,7 @@ impl RoughDielectric {
     }
     // Height correlated G2 (Heitz2014Microfacet 99)
     #[must_use]
-    fn g2_local(&self, a_sq: f32, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
+    pub fn g2_local(&self, a_sq: f32, wa: Vec3, wb: Vec3, wm: Vec3) -> f32 {
         let mut out = 1.0 / (1.0 + self.lambda(a_sq, wa) + self.lambda(a_sq, wb));
         if wa.dot(wm) * wa.z <= 0.0 || wb.dot(wm) * wb.z <= 0.0 {
             out = 0.0;

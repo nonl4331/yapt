@@ -46,12 +46,12 @@ impl Distribution1D {
     }
 
     pub fn sample_naive(&self, rng: &mut impl Rng) -> usize {
-        let threshold = rng.gen();
+        let threshold = rng.random();
 
         self.cdf.iter().position(|v| v >= &threshold).unwrap() - 1
     }
     pub fn sample(&self, rng: &mut impl Rng) -> usize {
-        let num = rng.gen();
+        let num = rng.random();
 
         let pred = |i| self.cdf[i] <= num;
 

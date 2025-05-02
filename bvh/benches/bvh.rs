@@ -1,6 +1,6 @@
 use bvh::{aabb::Aabb, Bvh};
 use rand::{thread_rng, Rng};
-use utility::Vec3;
+use yapt_core::Vec3;
 
 fn main() {
     divan::main();

@@ -142,8 +142,8 @@ impl Cam {
     pub fn get_ray(&self, i: u64, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
         let (u, v) = (i % self.width as u64, i / self.width as u64);
         let (u, v) = (
-            (u as f32 + rng.gen()) / self.width as f32,
-            (v as f32 + rng.gen()) / self.height as f32,
+            (u as f32 + rng.random()) / self.width as f32,
+            (v as f32 + rng.random()) / self.height as f32,
         );
 
         (
@@ -168,7 +168,7 @@ impl Cam {
     }
     #[must_use]
     pub fn get_random_ray(&self, rng: &mut impl MinRng) -> ([f32; 2], Ray) {
-        let (u, v) = (rng.gen(), rng.gen());
+        let (u, v) = (rng.random(), rng.random());
         (
             [u, v],
             Ray::new(

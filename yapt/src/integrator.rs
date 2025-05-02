@@ -44,7 +44,7 @@ impl Naive {
 
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
-                if rng.gen() > p {
+                if rng.random() > p {
                     break;
                 }
                 tp /= p;
@@ -101,7 +101,7 @@ impl NEEMIS {
             // Light sampling
             // ----
             // pick light
-            let light_idx = rng.gen_range(0.0..(samplable.len() as f32)) as usize;
+            let light_idx = rng.random_range(0.0..(samplable.len() as f32)) as usize;
             let light_idx = samplables[light_idx];
             let light = &tris[light_idx];
 
@@ -173,7 +173,7 @@ impl NEEMIS {
             // ----
             if depth > RUSSIAN_ROULETTE_THRESHOLD {
                 let p = tp.component_max();
-                if rng.gen() > p {
+                if rng.random() > p {
                     break;
                 }
                 tp /= p;

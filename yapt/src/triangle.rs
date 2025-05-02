@@ -174,8 +174,8 @@ impl Tri {
         let v1 = verts[self.pos[1]];
         let v2 = verts[self.pos[2]];
 
-        let uv = rng.gen().sqrt();
-        let uv = (1.0 - uv, uv * rng.gen());
+        let uv = rng.random().sqrt();
+        let uv = (1.0 - uv, uv * rng.random());
 
         let point = uv.0 * v0 + uv.1 * v1 + (1.0 - uv.0 - uv.1) * v2;
 

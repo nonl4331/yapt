@@ -1,0 +1,19 @@
+[package]
+name = "yapt_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = { version = "0.9.1", optional = true }
+json = { version = "0.12.4", optional = true }
+
+[features]
+rand = ["dep:rand"]
+json = ["dep:json"]
+
+[dev-dependencies]
+rand = "0.9.1"
+log = "0.4.27"
+env_logger = "0.11.8"
+image = "0.25.1"
+GSL = "7.0"

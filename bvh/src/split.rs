@@ -138,6 +138,6 @@ fn bucket_idx(axis: usize, node_data: &BoundingData, min: f32, extent: f32) -> u
 
 fn split_equal(axis: usize, node_data: &mut [BoundingData]) -> usize {
     let len = node_data.len();
-    node_data[0..len].sort_by(|a, b| utility::float_cmp(a.centroid[axis], b.centroid[axis]));
+    node_data[0..len].sort_by(|a, b| yapt_core::float_cmp(a.centroid[axis], b.centroid[axis]));
     len / 2
 }

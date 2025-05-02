@@ -11,14 +11,12 @@ pub const HEIGHT: std::num::NonZeroU32 = unsafe { std::num::NonZeroU32::new_unch
 pub const NO_TEXTURE: usize = usize::MAX;
 
 pub mod camera;
-pub mod coord;
 pub mod distributions;
 pub mod envmap;
 #[cfg(feature = "gui")]
 pub mod gui;
 pub mod integrator;
 pub mod loader;
-pub mod material;
 pub mod overrides;
 pub mod pssmlt;
 pub mod texture;
@@ -27,11 +25,12 @@ pub mod work_handler;
 
 pub mod prelude {
     pub use crate::{
-        camera::Cam, coord::*, envmap::*, feature_enabled, integrator::*, loader, material::*,
-        pssmlt::MinRng, texture::*, triangle::Tri, work_handler::*, InputParameters,
-        IntegratorType, Intersection, RenderSettings, Splat, BVH, CAM, DISABLE_SHADING_NORMALS,
+        camera::Cam, envmap::*, feature_enabled, integrator::*, loader,
+        texture::*, triangle::Tri, work_handler::*, InputParameters,
+        IntegratorType,  RenderSettings, Splat, BVH, CAM, DISABLE_SHADING_NORMALS,
         ENVMAP, HEIGHT, MATERIALS, MATERIAL_NAMES, NORMALS, SAMPLABLE, TEXTURES, TEXTURE_NAMES,
         TRIANGLES, UVS, VERTICES, WIDTH,
+        Mat, TextureIndex,
     };
     pub use bvh::Bvh;
     pub use derive_new::new;
@@ -43,7 +42,7 @@ pub mod prelude {
         ptr::{addr_of, addr_of_mut},
         sync::Arc,
     };
-    pub use utility::{Ray, Vec2, Vec3};
+    pub use yapt_core::*;
 }
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -96,6 +95,17 @@ pub fn disable_feature(option: u64) {
     }
 }
 
+pub type Mat = Material<TextureIndex>;
+
+pub struct TextureIndex(usize);
+
+impl TextureHandler for TextureIndex {
+    fn uv_value(&self, uv: Vec2) -> Vec3 {
+        unsafe { crate::TEXTURES.get().as_ref_unchecked() [self.0].uv_value(uv) }
+    }
+    fn does_intersect(&self, _: Vec2, _: &mut impl MinRng) -> bool { true }
+}
+
 #[derive(clap::ValueEnum, Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub enum IntegratorType {
     Naive,
@@ -124,40 +134,6 @@ impl fmt::Display for IntegratorType {
     }
 }
 
-#[derive(Debug, new, Clone)]
-pub struct Intersection {
-    pub t: f32,
-    pub uv: Vec2,
-    pub pos: Vec3,
-    pub nor: Vec3,
-    pub out: bool,
-    pub mat: usize,
-    pub id: usize,
-}
-
-impl Intersection {
-    pub const NONE: Self = Self {
-        t: -1.0,
-        uv: Vec2::ZERO,
-        pos: Vec3::ZERO,
-        nor: Vec3::ZERO,
-        out: false,
-        mat: 0,
-        id: 0,
-    };
-
-    #[allow(clippy::float_cmp)]
-    #[must_use]
-    pub fn is_none(&self) -> bool {
-        self.t == -1.0
-    }
-
-    pub fn min(&mut self, other: Self) {
-        if self.is_none() || (other.t < self.t && other.t > 0.0) {
-            *self = other;
-        }
-    }
-}
 
 fn main() {
     create_logger();

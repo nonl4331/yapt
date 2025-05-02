@@ -81,7 +81,7 @@ impl<R: Rng> PssState<R> {
     // 1:9 ratio of large:small mutation
     pub fn start_iteration(&mut self) {
         self.iteration += 1;
-        self.is_large_mutation = self.rng.gen::<f32>() < Self::LARGE_PROB;
+        self.is_large_mutation = self.rng.random::<f32>() < Self::LARGE_PROB;
         self.state_idx = 0;
     }
     pub fn accept(&mut self) {
@@ -105,13 +105,13 @@ impl<R: Rng> PssState<R> {
 
         // apply large mutation
         if sample.modified_idx < self.last_large_idx {
-            sample.value = self.rng.gen();
+            sample.value = self.rng.random();
         }
 
         // backup and apply small mutations
         sample.backup();
         if self.is_large_mutation {
-            sample.value = self.rng.gen();
+            sample.value = self.rng.random();
         } else {
             let small_mutations = self.iteration - self.last_large_idx;
             let eff_std = Self::SMALL_STDEV * (small_mutations as f32).sqrt();
@@ -130,27 +130,12 @@ impl<R: Rng> PssState<R> {
     }
 }
 
-use std::ops::Range;
 
-pub trait MinRng {
-    fn gen(&mut self) -> f32;
-    fn gen_range(&mut self, range: Range<f32>) -> f32;
-}
-
-impl<R: Rng> MinRng for PssState<R> {
-    fn gen(&mut self) -> f32 {
+impl<R: Rng> yapt_core::MinRng for PssState<R> {
+    fn random(&mut self) -> f32 {
         self.gen_unif()
     }
-    fn gen_range(&mut self, range: Range<f32>) -> f32 {
+    fn random_range(&mut self, range: std::ops::Range<f32>) -> f32 {
         (range.end - range.start) * self.gen_unif() + range.start
-    }
-}
-
-impl<R: Rng> MinRng for R {
-    fn gen(&mut self) -> f32 {
-        self.gen::<f32>()
-    }
-    fn gen_range(&mut self, range: Range<f32>) -> f32 {
-        self.gen_range(range)
     }
 }

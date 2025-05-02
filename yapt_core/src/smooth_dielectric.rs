@@ -1,4 +1,4 @@
-pub use crate::prelude::*;
+use super::*;
 
 #[derive(Debug)]
 pub struct SmoothDielectric {
@@ -6,8 +6,8 @@ pub struct SmoothDielectric {
 }
 
 impl SmoothDielectric {
-    pub fn new(ior: f32) -> Mat {
-        Mat::Refractive(Self { ior })
+    pub fn new<T: TextureHandler>(ior: f32) -> Material<T> {
+        Material::Refractive(Self { ior })
     }
     // see https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
     pub fn scatter(
@@ -31,7 +31,7 @@ impl SmoothDielectric {
         let r = super::fresnel_dielectric(eta1, eta2, sect.nor, wo);
 
         // reflect
-        if r >= rng.gen() {
+        if r >= rng.random() {
             let wi = wo.reflected(sect.nor);
             let origin = sect.pos + 0.00001 * sect.nor;
             *ray = Ray::new(origin, wi);

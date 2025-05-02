@@ -1,84 +1,17 @@
-use std::f32::consts::{FRAC_1_PI, TAU};
-use std::ops::{BitAnd, BitOr};
-
-use crate::coord::Coordinate;
-use crate::{prelude::*, TEXTURES};
-
-mod rough_conductor;
-mod rough_dielectric;
-mod smooth_conductor;
-mod smooth_dielectric;
-mod smooth_dielectric_lambertian;
-mod testing;
-
-pub use rough_conductor::RoughConductor;
-pub use rough_dielectric::RoughDielectric;
-pub use smooth_conductor::SmoothConductor;
-pub use smooth_dielectric::SmoothDielectric;
-pub use smooth_dielectric_lambertian::SmoothDielectricLambertian;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ScatterStatus(u8);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MaterialProperties(u8);
-
-impl ScatterStatus {
-    pub const NORMAL: Self = Self(0);
-    pub const EXIT: Self = Self(1);
-    pub const DIRAC_DELTA: Self = Self(1 << 1);
-    pub fn contains(&self, other: Self) -> bool {
-        (*self | other) == *self
-    }
-}
-
-impl BitAnd for ScatterStatus {
-    type Output = Self;
-    fn bitand(self, rhs: Self) -> Self::Output {
-        Self(self.0 & rhs.0)
-    }
-}
-impl BitOr for ScatterStatus {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl MaterialProperties {
-    pub const NORMAL: Self = Self(0);
-    pub const ONLY_DIRAC_DELTA: Self = Self(1);
-    pub fn contains(&self, other: Self) -> bool {
-        (*self | other) == *self
-    }
-}
-
-impl BitAnd for MaterialProperties {
-    type Output = Self;
-    fn bitand(self, rhs: Self) -> Self::Output {
-        Self(self.0 & rhs.0)
-    }
-}
-impl BitOr for MaterialProperties {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-#[derive(Debug, new)]
-pub enum Mat {
-    Matte(Lambertian),
+use super::*;
+#[derive(Debug)]
+pub enum Material<T: TextureHandler> {
+    Matte(Lambertian<T>),
     Light(Light),
-    Metallic(RoughConductor),
-    Glossy(SmoothDielectricLambertian),
+    Metallic(RoughConductor<T>),
+    Glossy(SmoothDielectricLambertian<T>),
     Refractive(SmoothDielectric),
-    RoughRefractive(RoughDielectric),
-    Reflective(SmoothConductor),
+    RoughRefractive(RoughDielectric<T>),
+    Reflective(SmoothConductor<T>),
     Invisible,
 }
 
-impl Mat {
+impl<T: TextureHandler> Material<T> {
     #[must_use]
     pub fn eval(
         &self,
@@ -87,14 +20,13 @@ impl Mat {
         mut wi: Vec3,
         status: ScatterStatus,
     ) -> Vec3 {
-        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
         if self.requires_local_space() {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
 
         match self {
             // cos pdf and weakening factor cancel out
-            Self::Matte(m) => texs[m.albedo].uv_value(sect.uv),
+            Self::Matte(m) => m.albedo(sect.uv),
             Self::Glossy(m) => m.eval(sect, wi, wo, status),
             Self::Light(_) | Self::Invisible => unreachable!(),
             Self::Metallic(m) => m.eval(wo, wi, sect),
@@ -110,7 +42,7 @@ impl Mat {
         rng: &mut impl MinRng,
     ) -> ScatterStatus {
         match self {
-            Self::Matte(_) => Lambertian::scatter(ray, sect, rng),
+            Self::Matte(_) => Lambertian::<T>::scatter(ray, sect, rng),
             Self::Light(_) => ScatterStatus::EXIT,
             Self::Invisible => unreachable!(),
             Self::Metallic(m) => m.scatter(sect, ray, rng),
@@ -127,12 +59,11 @@ impl Mat {
         }
     }
     pub fn uv_intersect(&self, uv: Vec2, rng: &mut impl MinRng) -> bool {
-        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
 
         match self {
             Self::Invisible => false,
-            Self::Metallic(m) => texs[m.f0].does_intersect(uv, rng),
-            Self::Reflective(m) => texs[m.f0].does_intersect(uv, rng),
+            Self::Metallic(m) => m.f0.does_intersect(uv, rng),
+            Self::Reflective(m) => m.f0.does_intersect(uv, rng),
             _ => true,
         }
     }
@@ -157,7 +88,7 @@ impl Mat {
             (wo, wi) = Self::to_local_space(sect, wo, wi);
         }
         match self {
-            Self::Matte(_) => Lambertian::pdf(wi, sect.nor),
+            Self::Matte(_) => Lambertian::<T>::pdf(wi, sect.nor),
             Self::Light(_) => 0.0,
             Self::Metallic(m) => m.pdf(wo, wi, sect),
             Self::RoughRefractive(m) => m.pdf(wo, wi, sect),
@@ -200,13 +131,13 @@ impl Mat {
 }
 
 #[derive(Debug)]
-pub struct Lambertian {
-    pub albedo: usize,
+pub struct Lambertian<T: TextureHandler> {
+    pub albedo: T,
 }
 
-impl Lambertian {
-    pub fn new(albedo: usize) -> Mat {
-        Mat::Matte(Self { albedo })
+impl<T: TextureHandler> Lambertian<T> {
+    pub fn new(albedo: T) -> Material<T> {
+        Material::Matte(Self { albedo })
     }
     pub fn scatter(ray: &mut Ray, sect: &Intersection, rng: &mut impl MinRng) -> ScatterStatus {
         let dir = Self::sample(sect.nor, rng);
@@ -215,9 +146,9 @@ impl Lambertian {
     }
     #[must_use]
     fn sample_local(rng: &mut impl MinRng) -> Vec3 {
-        let cos_theta = rng.gen().sqrt();
+        let cos_theta = rng.random().sqrt();
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
-        let phi = TAU * rng.gen();
+        let phi = TAU * rng.random();
         Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
     }
     #[must_use]
@@ -234,8 +165,7 @@ impl Lambertian {
     }
     #[must_use]
     pub fn albedo(&self, uv: Vec2) -> Vec3 {
-        let texs = unsafe { TEXTURES.get().as_ref_unchecked() };
-        texs[self.albedo].uv_value(uv)
+        self.albedo.uv_value(uv)
     }
 }
 
@@ -245,8 +175,8 @@ pub struct Light {
 }
 
 impl Light {
-    pub fn new(irradiance: Vec3) -> Mat {
-        Mat::Light(Self { irradiance })
+    pub fn new<T: TextureHandler>(irradiance: Vec3) -> Material<T> {
+        Material::Light(Self { irradiance })
     }
 }
 

@@ -89,13 +89,12 @@ mod tests {
     const ETA: f32 = 100.0 * f32::EPSILON;
 
     use super::*;
-    use rand::thread_rng;
-    use rand::Rng;
+    use rand::prelude::*;
 
     fn random_unit_vector() -> Vec3 {
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
-        Vec3::new(rng.gen(), rng.gen(), rng.gen()).normalised()
+        Vec3::new(rng.random(), rng.random(), rng.random()).normalised()
     }
 
     #[test]

@@ -1,18 +1,18 @@
-use crate::prelude::*;
+use super::*;
 
 #[derive(Debug)]
-pub struct SmoothDielectricLambertian {
+pub struct SmoothDielectricLambertian<T: TextureHandler> {
     pub ior: f32,
-    albedo: usize,
+    albedo: T,
     eta_sq: f32,
     ri_average: f32,
 }
 
-impl SmoothDielectricLambertian {
-    pub fn new(ior: f32, albedo: usize) -> Mat {
-        Mat::Glossy(Self::new_raw(ior, albedo))
+impl<T: TextureHandler> SmoothDielectricLambertian<T> {
+    pub fn new(ior: f32, albedo: T) -> Material<T> {
+        Material::Glossy(Self::new_raw(ior, albedo))
     }
-    pub fn new_raw(ior: f32, albedo: usize) -> Self {
+    pub fn new_raw(ior: f32, albedo: T) -> Self {
         let ni = ior;
         let ni2 = ni.powi(2);
         let ni4 = ni2.powi(2);
@@ -45,10 +45,10 @@ impl SmoothDielectricLambertian {
         let r = super::fresnel_dielectric(1.0, self.ior, sect.nor, wo);
         let origin = sect.pos + 0.00001 * sect.nor;
 
-        if rng.gen() > r {
-            let cos_theta = rng.gen().sqrt();
+        if rng.random() > r {
+            let cos_theta = rng.random().sqrt();
             let sin_theta = (1.0 - cos_theta.powi(2)).sqrt();
-            let phi = TAU * rng.gen();
+            let phi = TAU * rng.random();
             let local_wi = Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta);
 
             let wi = Coordinate::new_from_z(sect.nor).local_to_global(local_wi);
@@ -89,7 +89,6 @@ impl SmoothDielectricLambertian {
     }
     #[must_use]
     pub fn get_albedo(&self, sect: &Intersection) -> Vec3 {
-        let texs = unsafe { crate::TEXTURES.get().as_ref_unchecked() };
-        texs[self.albedo].uv_value(sect.uv)
+        self.albedo.uv_value(sect.uv)
     }
 }

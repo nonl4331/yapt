@@ -66,7 +66,7 @@ impl Texture {
                 let v = uv.y.fract().abs();
                 let x = ((img.width - 1) as f32 * u) as usize;
                 let y = ((img.height - 1) as f32 * v) as usize;
-                img.backing[x + img.width * y][3] >= rng.gen()
+                img.backing[x + img.width * y][3] >= rng.random()
             }
             Self::Solid(_v) => true,
         }

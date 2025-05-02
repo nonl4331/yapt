@@ -3,8 +3,7 @@ use crate::aabb::Aabound;
 use crate::split::split;
 use core::ops::Range;
 use std::collections::VecDeque;
-use utility::Ray;
-use utility::Vec3;
+use yapt_core::*;
 
 pub mod aabb;
 mod split;
@@ -48,7 +47,7 @@ impl Bvh {
 
         bvh.construct_node(0, &mut order, &mut prim_data);
 
-        utility::sort_by_indices(primitives, order);
+        yapt_core::sort_by_indices(primitives, order);
 
         bvh
     }
@@ -82,7 +81,7 @@ impl Bvh {
                 .unwrap();
 
             // use the axis with the maximum extend to split with
-            let max_axis = utility::max_axis(&centroid_bounds.extent());
+            let max_axis = yapt_core::max_axis(&centroid_bounds.extent());
 
             if centroid_bounds.max[max_axis] - centroid_bounds.min[max_axis] < 100.0 * EPSILON {
                 // the maximum axis is small enough that it's not worth splitting

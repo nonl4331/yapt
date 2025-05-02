@@ -11,28 +11,6 @@ use std::str::FromStr;
 
 type Quat = Quaternion;
 
-impl TryFrom<&[JsonValue]> for Quat {
-    type Error = &'static str;
-    fn try_from(value: &[JsonValue]) -> Result<Self, Self::Error> {
-        if let [JsonValue::Number(w), JsonValue::Number(x), JsonValue::Number(y), JsonValue::Number(z)] =
-            value[..]
-        {
-            Ok(Quat::new(w.into(), x.into(), y.into(), z.into()))
-        } else {
-            Err("Failed to parse into Quat")
-        }
-    }
-}
-impl TryFrom<&JsonValue> for Quat {
-    type Error = &'static str;
-    fn try_from(value: &JsonValue) -> Result<Self, Self::Error> {
-        if let JsonValue::Array(arr) = value {
-            Ok(arr[..].try_into()?)
-        } else {
-            Err("Failed to parse into Quat")
-        }
-    }
-}
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum TexIdentifier {

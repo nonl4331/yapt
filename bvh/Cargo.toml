@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-utility = { path = "../utility"}
+yapt_core = { path = "../yapt_core"}
 
 [dev-dependencies]
 rand = { version = "0.8.5", features = [ "small_rng" ] }
