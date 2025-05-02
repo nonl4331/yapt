@@ -2,6 +2,9 @@ pub trait TextureHandler {
     fn uv_value(&self, uv: Vec2) -> Vec3;
     fn does_intersect(&self, _: Vec2, _: &mut impl MinRng) -> bool { true }
 }
+impl TextureHandler for Vec3 {
+    fn uv_value(&self, _: Vec2) -> Vec3 { *self }
+}
 
 mod coord;
 mod rough_conductor;
