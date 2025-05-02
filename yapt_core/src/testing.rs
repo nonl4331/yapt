@@ -4,11 +4,6 @@ mod tests {
     use std::sync::atomic::Ordering::SeqCst;
     pub static LOADED_DATA: AtomicU8 = AtomicU8::new(0);
 
-
-    impl TextureHandler for Vec3 {
-        fn uv_value(&self, _: Vec2) -> Vec3 { *self }
-    }
-
     #[cfg(not(feature = "rand"))]
     mod r {
         use rand::Rng;
