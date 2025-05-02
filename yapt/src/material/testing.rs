@@ -55,6 +55,7 @@ mod tests {
         test_material("lambertian", mat, wo, &mut rng);
     }
 
+    // note this doesn't test the delta dirac part yet
     #[test]
     pub fn layered() {
         init_test();
@@ -89,6 +90,21 @@ mod tests {
         log_info("glossy", format!("sum: {sum} vs {non_dirac}"));
 
         assert!((sum - non_dirac as f64).abs() < PDF_EPS);
+    }
+
+    #[test]
+    pub fn rough_dielectric() {
+        init_test();
+        let mut rng = thread_rng();
+        let wo = generate_wo(&mut rng, true);
+        let a = get_a();
+
+        let name = "rough dielectric";
+        let mat = RoughDielectric::new(RAND_TEX, 1.5);
+
+        log_info("rough dielectric", format!("alpha: {a}"));
+
+        test_material(name, mat, wo, &mut rng);
     }
 
     #[test]

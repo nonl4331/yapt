@@ -125,12 +125,30 @@ impl RoughDielectric {
         }
         let eta = eta1 / eta2;
 
-        let refraction = wo.z * wi.z < 0.0;
+        let w_ref = (wi + wo).normalised();
+        let mut ret = 0.0;
+        if w_ref.z > 0.0 && !(w_ref.dot(wi) * wi.z < 0.0 || w_ref.dot(wo) * wo.z < 0.0) {
+            ret += super::fresnel_dielectric(eta1, eta2, w_ref, wo)
+                * self.vndf_local(a.powi(2), w_ref, wo)
+                / (4.0 * wo.dot(w_ref));
+        }
+
+        let w_ref = (eta2 * wi + eta1 * wo).normalised();
+        if w_ref.z > 0.0 && !(w_ref.dot(wi) * wi.z < 0.0 || w_ref.dot(wo) * wo.z < 0.0) {
+            let denom = ((w_ref.dot(wi) + w_ref.dot(wo)) / eta).powi(2);
+            ret += (1.0 - super::fresnel_dielectric(eta1, eta2, w_ref, wo))
+                * self.vndf_local(a.powi(2), w_ref, wo)
+                * wo.dot(w_ref).abs()
+                / denom;
+        }
+
+        ret
+
+        /*let refraction = wo.z * wi.z < 0.0;
 
         if refraction {
             // will shit itself when eta1 == eta2
             let wm = (eta2 * wi + eta1 * wo).normalised();
-            let wm = wm * wm.z.signum();
 
             // backfacing microfacet
             if wm.dot(wi) * wi.z < 0.0 || wm.dot(wo) * wo.z < 0.0 {
@@ -144,7 +162,7 @@ impl RoughDielectric {
         // reflection
         let wm = (wo + wi).normalised();
         // Heitz2018GGX (17)
-        self.vndf_local(a.powi(2), wm, wo) / (4.0 * wo.dot(wm))
+        self.vndf_local(a.powi(2), wm, wo) / (4.0 * wo.dot(wm))*/
     }
 
     #[must_use]
