@@ -59,7 +59,7 @@ impl eframe::App for App {
                                 rs.height as usize,
                                 |x, y| {
                                     let rgb = self.canvas[x + y * rs.width as usize] * mult as f32;
-                                    (rgb.x, rgb.y, rgb.z)
+                                    (rgb.x.powf(1.0/2.2), rgb.y.powf(1.0/2.2), rgb.z.powf(1.0/2.2))
                                 },
                             )
                             .unwrap();
@@ -156,7 +156,7 @@ impl eframe::App for App {
                             rs.height as usize,
                             |x, y| {
                                 let rgb = self.canvas[x + y * rs.width as usize] * mult;
-                                (rgb.x, rgb.y, rgb.z)
+                                (rgb.x.powf(1.0/2.2), rgb.y.powf(1.0/2.2), rgb.z.powf(1.0/2.2))
                             },
                         )
                         .unwrap();
