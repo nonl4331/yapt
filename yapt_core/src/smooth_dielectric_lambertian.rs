@@ -43,7 +43,6 @@ impl<T: TextureHandler> SmoothDielectricLambertian<T> {
         // by convention both wi and wo are pointing away from the surface
         let wo = -ray.dir;
         let r = super::fresnel_dielectric(1.0, self.ior, sect.nor, wo);
-        let origin = sect.pos + 0.00001 * sect.nor;
 
         if rng.random() > r {
             let cos_theta = rng.random().sqrt();
@@ -52,11 +51,11 @@ impl<T: TextureHandler> SmoothDielectricLambertian<T> {
             let local_wi = Vec3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta);
 
             let wi = Coordinate::new_from_z(sect.nor).local_to_global(local_wi);
-            *ray = Ray::new(origin, wi);
+            *ray = Ray::new(sect.pos, wi);
             ScatterStatus::NORMAL
         } else {
             let wi = wo.reflected(sect.nor);
-            *ray = Ray::new(origin, wi);
+            *ray = Ray::new(sect.pos, wi);
             ScatterStatus::DIRAC_DELTA
         }
     }

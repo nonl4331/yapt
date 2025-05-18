@@ -33,8 +33,7 @@ impl SmoothDielectric {
         // reflect
         if r >= rng.random() {
             let wi = wo.reflected(sect.nor);
-            let origin = sect.pos + 0.00001 * sect.nor;
-            *ray = Ray::new(origin, wi);
+            *ray = Ray::new(sect.pos, wi);
             return ScatterStatus::DIRAC_DELTA;
         }
 
@@ -42,9 +41,8 @@ impl SmoothDielectric {
         let perp = eta * (cosi * sect.nor - wo);
         let para = -(1.0 - perp.mag_sq()).abs().sqrt() * sect.nor;
         let wi = perp + para;
-        let origin = sect.pos - 0.00001 * sect.nor;
-        *ray = Ray::new(origin, wi);
+        *ray = Ray::new(sect.pos, wi);
 
-        ScatterStatus::DIRAC_DELTA
+        ScatterStatus::DIRAC_DELTA & ScatterStatus::BTDF
     }
 }

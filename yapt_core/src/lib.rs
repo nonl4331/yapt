@@ -586,6 +586,7 @@ impl ScatterStatus {
     pub const NORMAL: Self = Self(0);
     pub const EXIT: Self = Self(1);
     pub const DIRAC_DELTA: Self = Self(1 << 1);
+    pub const BTDF: Self = Self(1 << 2);
     pub fn contains(&self, other: Self) -> bool {
         (*self | other) == *self
     }

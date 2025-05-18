@@ -43,7 +43,7 @@ impl<T: TextureHandler> RoughDielectric<T> {
         if f >= rng.random() {
             let wi = wo.reflected(wm);
             *ray = Ray::new(
-                sect.pos + sect.nor * 0.00001,
+                sect.pos,
                 coord.local_to_global(wi).normalised(),
             );
             return ScatterStatus::NORMAL;
@@ -55,11 +55,11 @@ impl<T: TextureHandler> RoughDielectric<T> {
         let wi = perp + para;
         assert!(wm.dot(wo) >= 0.0 && wo.dot(wi) < 0.0);
         *ray = Ray::new(
-            sect.pos - sect.nor * 0.00001,
+            sect.pos,
             coord.local_to_global(wi).normalised(),
         );
 
-        ScatterStatus::NORMAL
+        ScatterStatus::NORMAL & ScatterStatus::BTDF
     }
     #[must_use]
     pub fn eval(&self, wo: Vec3, wi: Vec3, sect: &Intersection) -> Vec3 {

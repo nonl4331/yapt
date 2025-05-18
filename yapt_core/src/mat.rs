@@ -41,7 +41,7 @@ impl<T: TextureHandler> Material<T> {
         ray: &mut Ray,
         rng: &mut impl MinRng,
     ) -> ScatterStatus {
-        match self {
+        let status = match self {
             Self::Matte(_) => Lambertian::<T>::scatter(ray, sect, rng),
             Self::Light(_) => ScatterStatus::EXIT,
             Self::Invisible => unreachable!(),
@@ -50,7 +50,14 @@ impl<T: TextureHandler> Material<T> {
             Self::Refractive(m) => m.scatter(sect, ray, rng),
             Self::RoughRefractive(m) => m.scatter(sect, ray, rng),
             Self::Reflective(m) => m.scatter(sect, ray),
+        };
+
+        if status.contains(ScatterStatus::BTDF) {
+            ray.origin -= 0.00001 * sect.nor;
+        } else {
+            ray.origin += 0.00001 * sect.nor;
         }
+        status
     }
     pub const fn properties(&self) -> MaterialProperties {
         match self {
@@ -59,7 +66,6 @@ impl<T: TextureHandler> Material<T> {
         }
     }
     pub fn uv_intersect(&self, uv: Vec2, rng: &mut impl MinRng) -> bool {
-
         match self {
             Self::Invisible => false,
             Self::Metallic(m) => m.f0.does_intersect(uv, rng),

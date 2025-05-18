@@ -162,8 +162,7 @@ impl Tri {
             normal = -normal;
         }
 
-        let mut point = b0 * v0 + b1 * v1 + b2 * v2;
-        point += normal * 0.000001;
+        let point = b0 * v0 + b1 * v1 + b2 * v2;
 
         Intersection::new(t, uv, point, normal, out, self.mat, 0)
     }
