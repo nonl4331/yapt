@@ -53,18 +53,14 @@ impl eframe::App for App {
                         );
                         if !rs.output_filename.is_empty() {
                             let mult = 1.0 / rs.samples as f64;
-                            image::save_buffer(
+                            exr::image::write::write_rgb_file(
                                 rs.output_filename.to_owned(),
-                                &self
-                                    .canvas
-                                    .iter()
-                                    .map(|v| [v.x as f64, v.y as f64, v.z as f64])
-                                    .flatten()
-                                    .map(|v| ((v * mult).powf(1.0 / 2.2) * 255.0) as u8)
-                                    .collect::<Vec<_>>(),
-                                rs.width.into(),
-                                rs.height.into(),
-                                image::ColorType::Rgb8,
+                                rs.width as usize,
+                                rs.height as usize,
+                                |x, y| {
+                                    let rgb = self.canvas[x + y * rs.width as usize] * mult as f32;
+                                    (rgb.x, rgb.y, rgb.z)
+                                },
                             )
                             .unwrap();
                         }
@@ -154,18 +150,14 @@ impl eframe::App for App {
                     if ui.button("Save").clicked() {
                         let mult = ((u32::from(rs.width) * u32::from(rs.height)) as f64
                             / self.splats_done as f64) as f32;
-                        image::save_buffer(
+                        exr::image::write::write_rgb_file(
                             format!("{spp:.0}_{}", rs.output_filename),
-                            &self
-                                .canvas
-                                .iter()
-                                .map(|v| [v.x, v.y, v.z])
-                                .flatten()
-                                .map(|v| ((v * mult).powf(1.0 / 2.2) * 255.0) as u8)
-                                .collect::<Vec<_>>(),
-                            rs.width.into(),
-                            rs.height.into(),
-                            image::ColorType::Rgb8,
+                            rs.width as usize,
+                            rs.height as usize,
+                            |x, y| {
+                                let rgb = self.canvas[x + y * rs.width as usize] * mult;
+                                (rgb.x, rgb.y, rgb.z)
+                            },
                         )
                         .unwrap();
                     }
